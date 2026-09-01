@@ -28,6 +28,11 @@ public class ExecutionRequest {
     private String body;
     private List<FormDataItem> formData = new ArrayList<>();
 
+    /** JSON-body field names manually flagged Required by business logic — same "Required"
+     * concept as headers/query params, just for the raw JSON payload (which has no natural
+     * row-per-field structure of its own). Only meaningful when bodyType == JSON. */
+    private List<KeyValueItem> requiredPayloadFields = new ArrayList<>();
+
     private AuthConfig auth = new AuthConfig();
 
     private long timeoutMs = 30_000;

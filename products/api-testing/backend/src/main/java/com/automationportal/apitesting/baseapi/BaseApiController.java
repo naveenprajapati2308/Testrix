@@ -40,6 +40,7 @@ public class BaseApiController {
         private String bodyType;
         private String body;
         private String formData;       // JSON array of FormDataItem, only used when bodyType=FORM_DATA
+        private String requiredPayloadFields;  // JSON array of {key,value,enabled,required}, only used when bodyType=JSON
         private String authType;
         private String authConfig;     // AuthConfig JSON (encrypted at rest)
         private int timeoutMs = 15000;
@@ -151,6 +152,7 @@ public class BaseApiController {
         config.put("headers", configMapper.keyValues(api.getHeaders()));
         config.put("bodyType", api.getBodyType() == null || api.getBodyType().isBlank() ? "NONE" : api.getBodyType());
         config.put("body", api.getBody() == null ? "" : api.getBody());
+        config.put("requiredPayloadFields", configMapper.keyValues(api.getRequiredPayloadFields()));
         config.put("auth", configMapper.auth(api.getAuthConfig()));
         config.put("timeoutMs", api.getTimeoutMs());
         config.put("followRedirects", true);
@@ -248,6 +250,7 @@ public class BaseApiController {
         api.setBodyType(p.getBodyType());
         api.setBody(p.getBody());
         api.setFormData(p.getFormData());
+        api.setRequiredPayloadFields(p.getRequiredPayloadFields());
         api.setAuthType(p.getAuthType());
         api.setAuthConfig(p.getAuthConfig());
         api.setTimeoutMs(p.getTimeoutMs());

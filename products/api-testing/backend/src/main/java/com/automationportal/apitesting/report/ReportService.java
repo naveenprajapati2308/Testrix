@@ -7,6 +7,7 @@ import com.automationportal.apitesting.group.ApiGroupRepository;
 import com.automationportal.apitesting.history.BodyStore;
 import com.automationportal.apitesting.history.ExecutionHistory;
 import com.automationportal.apitesting.history.ExecutionHistoryRepository;
+import com.automationportal.apitesting.validation.BusinessValidationService;
 import com.automationportal.apitesting.validation.ValidationResultRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,6 +30,7 @@ public class ReportService {
     private final BodyStore bodyStore;
     private final ApiGroupExecutionRepository executionRepository;
     private final ApiGroupRepository groupRepository;
+    private final BusinessValidationService businessValidationService;
 
     public ReportData buildForHistory(Long executionHistoryId) {
         ExecutionHistory h = historyRepository.findById(executionHistoryId)
@@ -97,6 +99,7 @@ public class ReportService {
         b.setValidationPassed(h.getValidationPassed());
         b.setErrorMessage(h.getErrorMessage());
         b.setValidationResults(validationResultRepository.findViewsByExecutionId(h.getId()));
+        b.setRequiredFieldResults(businessValidationService.findByExecutionHistoryId(h.getId()));
         return b;
     }
 }

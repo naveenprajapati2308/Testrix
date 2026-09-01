@@ -12,4 +12,6 @@ public interface BusinessValidationRunRepository extends JpaRepository<BusinessV
 
     Optional<BusinessValidationRun> findFirstByProjectIdAndApiTypeAndApiIdOrderByCreatedAtDesc(
             Long projectId, BusinessValidationRun.ApiType apiType, Long apiId);
+
+    Optional<BusinessValidationRun> findByExecutionHistoryId(Long executionHistoryId);
 }

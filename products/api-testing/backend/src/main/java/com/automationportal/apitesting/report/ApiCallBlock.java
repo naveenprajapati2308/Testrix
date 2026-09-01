@@ -1,5 +1,6 @@
 package com.automationportal.apitesting.report;
 
+import com.automationportal.apitesting.validation.FieldValidationResult;
 import com.automationportal.apitesting.validation.ValidationResultView;
 import lombok.Data;
 
@@ -23,4 +24,8 @@ public class ApiCallBlock {
     private Boolean validationPassed;
     private String errorMessage;
     private List<ValidationResultView> validationResults;
+    /** Which payload/header/query fields were flagged Required by business logic for this
+     * specific run, and whether the backend actually enforced each one. Empty when nothing
+     * was marked Required — not an error, just nothing to show. */
+    private List<FieldValidationResult> requiredFieldResults;
 }

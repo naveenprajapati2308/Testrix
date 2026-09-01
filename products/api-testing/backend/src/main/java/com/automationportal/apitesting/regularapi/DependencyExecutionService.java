@@ -12,6 +12,8 @@ import com.automationportal.apitesting.execution.dto.ExecutionRequest;
 import com.automationportal.apitesting.execution.dto.ExecutionResponse;
 import com.automationportal.apitesting.history.ExecutionHistory;
 import com.automationportal.apitesting.history.ExecutionHistoryService;
+import com.automationportal.apitesting.validation.BusinessValidationRun;
+import com.automationportal.apitesting.validation.BusinessValidationService;
 import com.automationportal.apitesting.validation.ValidationEngine;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
@@ -49,6 +51,7 @@ public class DependencyExecutionService {
     private final ExecutionEngineService engine;
     private final ExecutionHistoryService historyService;
     private final ValidationEngine validationEngine;
+    private final BusinessValidationService businessValidationService;
     private final DynamicValueResolver dynamicValueResolver;
     private final RegularApiRequestBuilder requestBuilder;
     private final KhasraPickerService khasraPickerService;
@@ -123,13 +126,25 @@ public class DependencyExecutionService {
         // 4. Auto-run validation rules
         Boolean passed = validationEngine.validate(ExecutionHistory.ApiType.REGULAR, api.getId(),
                 history.getId(), response.getBody());
-        if (passed != null) {
-            historyService.markValidation(history, passed);
+
+        // 5. Auto-run required-field business validation (silently skipped when the API has
+        // nothing marked Required — most don't). Never for CHAIN_DEPENDENCY: this check sends
+        // its own extra live request, and a dependency resolution is explicitly guaranteed to
+        // execute the real target at most once per run (see resolveRegularApiForDependency /
+        // BaseApiExecutionService#resolveForDependency) — for a Send-OTP style dependency, a
+        // second live call here would silently invalidate the OTP the cached result depends on.
+        Boolean businessOk = trigger == ExecutionHistory.TriggeredBy.CHAIN_DEPENDENCY ? null
+                : businessValidationService.autoCheck(request, api.getProjectId(),
+                        BusinessValidationRun.ApiType.REGULAR, api.getId(), "auto:" + trigger, history.getId());
+
+        Boolean combined = BusinessValidationService.combine(passed, businessOk);
+        if (combined != null) {
+            historyService.markValidation(history, combined);
         }
 
         result.setResponse(response);
         result.setExecutionHistoryId(history.getId());
-        result.setValidationPassed(passed);
+        result.setValidationPassed(combined);
         return result;
     }
 

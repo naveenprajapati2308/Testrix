@@ -42,6 +42,13 @@ public class BusinessValidationRun {
     @Column(name = "response_status_code")
     private Integer responseStatusCode;
 
+    /** Set only for auto-runs triggered during a real execution (Regular, Base, Collection
+     * request, or Group member) — links this result to that exact ExecutionHistory row so a
+     * report always shows what was true for that specific run. Null for the manual on-demand
+     * "Run Validation Check" button, which isn't tied to any one execution. */
+    @Column(name = "execution_history_id")
+    private Long executionHistoryId;
+
     /** JSON array of FieldValidationResult. */
     @Lob
     @Column(name = "field_results", columnDefinition = "LONGTEXT")

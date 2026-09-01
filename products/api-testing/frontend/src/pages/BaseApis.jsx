@@ -19,7 +19,7 @@ const OPERATORS = ['EQUALS', 'NOT_EQUALS', 'CONTAINS', 'REGEX', 'EXISTS', 'TYPE_
 
 const emptyForm = {
   name: '', method: 'GET', url: '', moduleId: '', headers: [],
-  bodyType: 'NONE', body: '', formData: [], auth: { ...EMPTY_AUTH },
+  bodyType: 'NONE', body: '', formData: [], requiredPayloadFields: [], auth: { ...EMPTY_AUTH },
   timeoutMs: 15000, cacheStrategy: 'PER_CALL', cacheTtlSeconds: 3600,
 };
 
@@ -68,6 +68,7 @@ export default function BaseApis() {
     headers: JSON.stringify(form.headers),
     bodyType: form.bodyType, body: form.body || null,
     formData: JSON.stringify(form.formData || []),
+    requiredPayloadFields: JSON.stringify(form.requiredPayloadFields || []),
     authType: form.auth.type,
     authConfig: JSON.stringify(form.auth),
     timeoutMs: Number(form.timeoutMs) || 15000,
@@ -135,6 +136,7 @@ export default function BaseApis() {
       headers: safeParse(api.headers, []),
       bodyType: api.bodyType || 'NONE', body: api.body || '',
       formData: safeParse(api.formData, []),
+      requiredPayloadFields: safeParse(api.requiredPayloadFields, []),
       auth: { ...EMPTY_AUTH, ...safeParse(api.authConfig, {}) },
       timeoutMs: api.timeoutMs, cacheStrategy: api.cacheStrategy,
       cacheTtlSeconds: api.cacheTtlSeconds ?? 3600,
@@ -287,6 +289,14 @@ export default function BaseApis() {
                 language={form.bodyType === 'JSON' ? 'json' : 'plaintext'}
                 value={form.body} onChange={(v) => setForm({ ...form, body: v ?? '' })}
                 options={{ minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false }} />
+            </div>
+          )}
+          {form.bodyType === 'JSON' && (
+            <div className="mt-2">
+              <div className="text-xs text-[var(--text-muted)] mb-1.5">Required Payload Fields</div>
+              <KeyValueEditor items={form.requiredPayloadFields}
+                onChange={(requiredPayloadFields) => setForm({ ...form, requiredPayloadFields })}
+                keyPlaceholder="JSON field name" showRequired />
             </div>
           )}
         </div>

@@ -42,6 +42,7 @@ export default function RequestWorkspace() {
   const [bodyType, setBodyType] = useState('NONE');
   const [body, setBody] = useState('');
   const [formData, setFormData] = useState([]);
+  const [requiredPayloadFields, setRequiredPayloadFields] = useState([]);
   const [auth, setAuth] = useState({ ...EMPTY_AUTH });
   const [builderSubTab, setBuilderSubTab] = useState('Parameters');
   const [response, setResponse] = useState(null);
@@ -70,7 +71,7 @@ export default function RequestWorkspace() {
   useEffect(() => {
     if (isNew) {
       setMethod('GET'); setUrl(''); setQueryParams([]); setHeaders([]);
-      setBodyType('NONE'); setBody(''); setFormData([]); setAuth({ ...EMPTY_AUTH });
+      setBodyType('NONE'); setBody(''); setFormData([]); setRequiredPayloadFields([]); setAuth({ ...EMPTY_AUTH });
       setRequestName(''); setFolderId(''); setResponse(null);
     }
   }, [requestId, isNew]);
@@ -86,6 +87,7 @@ export default function RequestWorkspace() {
       setBodyType(cfg.bodyType ?? 'NONE');
       setBody(cfg.body ?? '');
       setFormData(cfg.formData ?? []);
+      setRequiredPayloadFields(cfg.requiredPayloadFields ?? []);
       setAuth({ ...EMPTY_AUTH, ...(cfg.auth ?? {}) });
       setRequestName(existing.name);
       setFolderId(existing.folderId ?? '');
@@ -93,7 +95,7 @@ export default function RequestWorkspace() {
   }, [existing]);
 
   const buildConfig = () => ({
-    method, url, queryParams, headers, bodyType, body, formData, auth,
+    method, url, queryParams, headers, bodyType, body, formData, requiredPayloadFields, auth,
     timeoutMs: 30000, followRedirects: true, verifySsl: true,
   });
 
@@ -245,6 +247,13 @@ export default function RequestWorkspace() {
                       language={bodyType === 'JSON' ? 'json' : bodyType === 'XML' || bodyType === 'HTML' ? 'html' : 'plaintext'}
                       value={body} onChange={(v) => setBody(v ?? '')}
                       options={{ minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false }} />
+                  </div>
+                )}
+                {bodyType === 'JSON' && (
+                  <div className="shrink-0 pt-2">
+                    <div className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Required Payload Fields</div>
+                    <KeyValueEditor items={requiredPayloadFields} onChange={setRequiredPayloadFields}
+                      keyPlaceholder="JSON field name" showRequired />
                   </div>
                 )}
               </div>

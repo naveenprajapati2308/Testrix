@@ -46,6 +46,7 @@ public class RegularApiController {
         private String bodyType;
         private String bodyTemplate;
         private String formDataTemplate;   // JSON array of FormDataItem, only used when bodyType=FORM_DATA
+        private String requiredPayloadFieldsTemplate;  // JSON array of {key,value,enabled,required}, only used when bodyType=JSON
         private String authType;
         private String authConfig;
         private boolean dynamic;
@@ -155,6 +156,7 @@ public class RegularApiController {
         config.put("headers", configMapper.keyValues(api.getHeadersTemplate()));
         config.put("bodyType", api.getBodyType() == null || api.getBodyType().isBlank() ? "NONE" : api.getBodyType());
         config.put("body", api.getBodyTemplate() == null ? "" : api.getBodyTemplate());
+        config.put("requiredPayloadFields", configMapper.keyValues(api.getRequiredPayloadFieldsTemplate()));
         config.put("auth", configMapper.auth(api.getAuthConfig()));
         config.put("timeoutMs", api.getTimeoutMs());
         config.put("followRedirects", api.isFollowRedirects());
@@ -278,6 +280,7 @@ public class RegularApiController {
         api.setBodyType(p.getBodyType());
         api.setBodyTemplate(p.getBodyTemplate());
         api.setFormDataTemplate(p.getFormDataTemplate());
+        api.setRequiredPayloadFieldsTemplate(p.getRequiredPayloadFieldsTemplate());
         api.setAuthType(p.getAuthType());
         api.setAuthConfig(p.getAuthConfig());
         api.setDynamic(p.isDynamic());

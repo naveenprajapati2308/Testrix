@@ -96,7 +96,7 @@ export default function ValidationCheckPanel({ baseUrl }) {
 
       {!latest && (
         <div className="px-3 py-2 text-xs text-[var(--text-muted)]">
-          No checks run yet. Mark a field "Req" on Headers/Params/form-data above, then click Run.
+          No checks run yet. Mark a field "Req" on Headers/Params/form-data/payload above, then click Run.
         </div>
       )}
     </div>

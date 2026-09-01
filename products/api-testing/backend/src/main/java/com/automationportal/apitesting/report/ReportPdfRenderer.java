@@ -83,6 +83,20 @@ public class ReportPdfRenderer {
                 }
                 h.append("</table>");
             }
+
+            h.append("<b>Required Payload Fields</b>");
+            List<com.automationportal.apitesting.validation.FieldValidationResult> required = c.getRequiredFieldResults();
+            if (required == null || required.isEmpty()) {
+                h.append("<p>No fields marked Required.</p>");
+            } else {
+                h.append("<table><tr><th>Field</th><th>Source</th><th>Enforced by backend</th></tr>");
+                for (com.automationportal.apitesting.validation.FieldValidationResult f : required) {
+                    h.append("<tr><td>").append(esc(f.getKey())).append("</td><td>").append(esc(f.getSource()))
+                            .append("</td><td class=\"").append(f.isEnforced() ? "pass\">YES" : "fail\">NO").append("</td></tr>");
+                }
+                h.append("</table>");
+            }
+
             h.append("<p>Overall: <span class=\"").append(Boolean.TRUE.equals(c.getValidationPassed()) ? "pass\">PASS" : "fail\">FAIL")
                     .append("</span></p>");
         }

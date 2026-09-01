@@ -8,6 +8,8 @@ import com.automationportal.apitesting.execution.dto.ExecutionRequest;
 import com.automationportal.apitesting.execution.dto.ExecutionResponse;
 import com.automationportal.apitesting.history.ExecutionHistory;
 import com.automationportal.apitesting.history.ExecutionHistoryService;
+import com.automationportal.apitesting.validation.BusinessValidationRun;
+import com.automationportal.apitesting.validation.BusinessValidationService;
 import com.automationportal.apitesting.validation.ValidationEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,7 @@ public class BaseApiExecutionService {
     private final StringRedisTemplate redis;
     private final DynamicValueResolver dynamicValueResolver;
     private final ValidationEngine validationEngine;
+    private final BusinessValidationService businessValidationService;
 
     public record CachedResult(String body, boolean freshlyExecuted) { }
 
@@ -109,8 +112,18 @@ public class BaseApiExecutionService {
 
         Boolean passed = validationEngine.validate(ExecutionHistory.ApiType.BASE, api.getId(),
                 history.getId(), response.getBody());
-        if (passed != null) {
-            historyService.markValidation(history, passed);
+
+        // Never for CHAIN_DEPENDENCY: resolveForDependency's own contract is "executes this Base
+        // API at most once per run" (see its class comment — a Send-OTP dependency read by two
+        // downstream nodes must not each get a different OTP). This check sends its own extra
+        // live request, so running it here would silently break that guarantee.
+        Boolean businessOk = trigger == ExecutionHistory.TriggeredBy.CHAIN_DEPENDENCY ? null
+                : businessValidationService.autoCheck(request, api.getProjectId(),
+                        BusinessValidationRun.ApiType.BASE, api.getId(), "auto:" + trigger, history.getId());
+
+        Boolean combined = BusinessValidationService.combine(passed, businessOk);
+        if (combined != null) {
+            historyService.markValidation(history, combined);
         }
 
         if (response.isSuccess()) {
@@ -130,6 +143,7 @@ public class BaseApiExecutionService {
         req.setBodyType(parseBodyType(api.getBodyType()));
         req.setBody(api.getBody());
         req.setFormData(configMapper.formDataItems(api.getFormData()));
+        req.setRequiredPayloadFields(configMapper.keyValues(api.getRequiredPayloadFields()));
         req.setAuth(configMapper.auth(api.getAuthConfig()));
         req.setTimeoutMs(api.getTimeoutMs());
         return req;

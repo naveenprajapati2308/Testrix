@@ -305,6 +305,19 @@ function ExecutionExpand({ detail }) {
           </div>
         ))}
       </Section>
+      <Section title={`Required Payload Fields (${(detail.requiredFieldResults ?? []).length})`}>
+        {(detail.requiredFieldResults ?? []).length === 0 && <div className="text-xs text-[var(--text-muted)]">No fields marked Required.</div>}
+        {(detail.requiredFieldResults ?? []).map((f, idx) => (
+          <div key={idx} className={`flex items-center gap-2 text-xs py-1.5 px-2 rounded mb-1 ${f.enforced ? 'bg-[var(--success-bg-soft)]' : 'bg-[var(--danger-bg-soft)]'}`}>
+            {f.enforced ? <CheckCircle2 size={13} className="text-[var(--success-text)] shrink-0" /> : <XCircle size={13} className="text-[var(--danger-text)] shrink-0" />}
+            <span className="font-mono text-[var(--info-text)]">{f.key}</span>
+            <span className="text-[var(--text-muted)]">{f.source}</span>
+            <span className={`ml-auto ${f.enforced ? 'text-[var(--success-text)]' : 'text-[var(--danger-text)]'}`}>
+              {f.enforced ? 'enforced by backend' : 'NOT enforced by backend'}
+            </span>
+          </div>
+        ))}
+      </Section>
     </div>
   );
 }

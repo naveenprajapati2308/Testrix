@@ -1,5 +1,6 @@
 package com.automationportal.apitesting.report;
 
+import com.automationportal.apitesting.validation.FieldValidationResult;
 import com.automationportal.apitesting.validation.ValidationResultView;
 import org.springframework.stereotype.Component;
 
@@ -58,6 +59,20 @@ public class ReportMarkdownRenderer {
                 }
                 md.append("\n");
             }
+
+            md.append("**Required Payload Fields**\n\n");
+            List<FieldValidationResult> required = c.getRequiredFieldResults();
+            if (required == null || required.isEmpty()) {
+                md.append("_No fields marked Required._\n\n");
+            } else {
+                md.append("| Field | Source | Enforced by backend |\n|---|---|---|\n");
+                for (FieldValidationResult f : required) {
+                    md.append("| ").append(nz(f.getKey())).append(" | ").append(nz(f.getSource())).append(" | ")
+                            .append(f.isEnforced() ? "YES" : "NO").append(" |\n");
+                }
+                md.append("\n");
+            }
+
             md.append("Overall: **").append(Boolean.TRUE.equals(c.getValidationPassed()) ? "PASS" : "FAIL")
                     .append("**\n\n---\n\n");
         }

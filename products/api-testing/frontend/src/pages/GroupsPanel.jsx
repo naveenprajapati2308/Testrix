@@ -494,6 +494,23 @@ export function HistoryDetailPanel({ historyId, totalTimeMs }) {
               ))}
             </div>
           )}
+          {(detail.requiredFieldResults ?? []).length > 0 && (
+            <div>
+              <div className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Required payload fields</div>
+              <div className="border border-[var(--border)] rounded divide-y divide-[var(--border-soft)]">
+                {detail.requiredFieldResults.map((f, idx) => (
+                  <div key={idx} className="px-2.5 py-1.5 text-[11px] flex items-center gap-2">
+                    {f.enforced ? <CheckCircle2 size={11} className="text-[var(--success-text)]" /> : <XCircle size={11} className="text-[var(--danger-text)]" />}
+                    <span className="font-mono text-[var(--text-secondary)]">{f.key}</span>
+                    <span className="text-[var(--text-muted)]">{f.source}</span>
+                    <span className={f.enforced ? 'text-[var(--success-text)]' : 'text-[var(--danger-text)]'}>
+                      {f.enforced ? 'enforced by backend' : 'NOT enforced by backend'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <div className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Response body</div>
             <pre className="text-[11px] text-[var(--text-secondary)] bg-[var(--bg-surface-2)] border border-[var(--border)] rounded p-2.5 max-h-64 overflow-auto whitespace-pre-wrap break-all">

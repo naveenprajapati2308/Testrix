@@ -52,6 +52,12 @@ public class RegularApi {
     @Column(name = "form_data_template", columnDefinition = "LONGTEXT")
     private String formDataTemplate;
 
+    /** JSON array of {key,value,enabled,required} — JSON body field names flagged Required by
+     * business logic. Same shape as headersTemplate; only meaningful when bodyType=JSON. */
+    @Lob
+    @Column(name = "required_payload_fields_template", columnDefinition = "LONGTEXT")
+    private String requiredPayloadFieldsTemplate;
+
     @Column(name = "auth_type", length = 20)
     private String authType;
 

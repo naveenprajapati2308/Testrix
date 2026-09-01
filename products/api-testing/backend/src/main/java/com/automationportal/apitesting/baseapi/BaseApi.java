@@ -49,6 +49,12 @@ public class BaseApi {
     @Column(name = "form_data", columnDefinition = "LONGTEXT")
     private String formData;
 
+    /** JSON array of {key,value,enabled,required} — JSON body field names flagged Required by
+     * business logic. Same shape as headers; only meaningful when bodyType=JSON. */
+    @Lob
+    @Column(name = "required_payload_fields", columnDefinition = "LONGTEXT")
+    private String requiredPayloadFields;
+
     @Column(name = "auth_type", length = 20)
     private String authType;
 

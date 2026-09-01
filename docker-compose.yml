@@ -1,10 +1,4 @@
-# Testrix — umbrella orchestration for the whole platform.
-#
-#   docker compose up -d --build        → start every product
-#
-# Each product's stack is still fully standalone — you can also run
-# `docker compose up` inside any products/<name>/ folder to start just
-# that product, exactly as before the restructure.
+
 name: testrix
 
 include:

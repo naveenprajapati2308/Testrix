@@ -21,7 +21,7 @@ const OPERATORS = ['EQUALS', 'NOT_EQUALS', 'CONTAINS', 'REGEX', 'EXISTS', 'TYPE_
 const emptyForm = {
   name: '', method: 'GET', urlTemplate: '', moduleId: '',
   headersTemplate: [], queryParamsTemplate: [],
-  bodyType: 'NONE', bodyTemplate: '', formDataTemplate: [], auth: { ...EMPTY_AUTH },
+  bodyType: 'NONE', bodyTemplate: '', formDataTemplate: [], requiredPayloadFieldsTemplate: [], auth: { ...EMPTY_AUTH },
   dynamic: false, timeoutMs: 15000, followRedirects: true, verifySsl: true,
 };
 
@@ -85,6 +85,7 @@ export default function RegularApis() {
     queryParamsTemplate: JSON.stringify(form.queryParamsTemplate),
     bodyType: form.bodyType, bodyTemplate: form.bodyTemplate || null,
     formDataTemplate: JSON.stringify(form.formDataTemplate || []),
+    requiredPayloadFieldsTemplate: JSON.stringify(form.requiredPayloadFieldsTemplate || []),
     authType: form.auth.type, authConfig: JSON.stringify(form.auth),
     dynamic: form.dynamic, timeoutMs: Number(form.timeoutMs) || 15000,
     followRedirects: form.followRedirects, verifySsl: form.verifySsl,
@@ -184,6 +185,7 @@ export default function RegularApis() {
       queryParamsTemplate: safeParse(api.queryParamsTemplate, []),
       bodyType: api.bodyType || 'NONE', bodyTemplate: api.bodyTemplate || '',
       formDataTemplate: safeParse(api.formDataTemplate, []),
+      requiredPayloadFieldsTemplate: safeParse(api.requiredPayloadFieldsTemplate, []),
       auth: { ...EMPTY_AUTH, ...safeParse(api.authConfig, {}) },
       dynamic: api.dynamic, timeoutMs: api.timeoutMs,
       followRedirects: api.followRedirects, verifySsl: api.verifySsl,
@@ -323,6 +325,14 @@ export default function RegularApis() {
                     language={form.bodyType === 'JSON' ? 'json' : 'plaintext'}
                     value={form.bodyTemplate} onChange={(v) => setForm({ ...form, bodyTemplate: v ?? '' })}
                     options={{ minimap: { enabled: false }, fontSize: 12, scrollBeyondLastLine: false }} />
+                </div>
+              )}
+              {form.bodyType === 'JSON' && (
+                <div className="mt-2">
+                  <div className="text-xs text-[var(--text-muted)] mb-1.5">Required Payload Fields</div>
+                  <KeyValueEditor items={form.requiredPayloadFieldsTemplate}
+                    onChange={(requiredPayloadFieldsTemplate) => setForm({ ...form, requiredPayloadFieldsTemplate })}
+                    keyPlaceholder="JSON field name" showRequired />
                 </div>
               )}
             </div>

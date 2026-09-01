@@ -45,6 +45,7 @@ public class CollectionController {
     private final ObjectMapper objectMapper;
     private final CurrentProjectService currentProjectService;
     private final com.automationportal.apitesting.validation.BusinessValidationService businessValidationService;
+    private final com.automationportal.apitesting.validation.ValidationEngine validationEngine;
     private final com.automationportal.apitesting.security.CurrentUserService currentUserService;
     private final com.automationportal.apitesting.execution.DynamicValueResolver dynamicValueResolver;
 
@@ -257,8 +258,21 @@ public class CollectionController {
         dynamicValueResolver.resolve(config, new java.util.HashMap<>());
 
         ExecutionResponse response = executionEngineService.execute(config);
-        executionHistoryService.record(collection.getProjectId(), ExecutionHistory.ApiType.COLLECTION, r.getId(), r.getName(),
-                null, null, ExecutionHistory.TriggeredBy.MANUAL, config, response);
+        ExecutionHistory history = executionHistoryService.record(collection.getProjectId(), ExecutionHistory.ApiType.COLLECTION,
+                r.getId(), r.getName(), null, null, ExecutionHistory.TriggeredBy.MANUAL, config, response);
+
+        // Collection requests had no auto-validation at all before — rule-based validation and
+        // required-field business validation now run here on every execute, same as Regular/Base APIs.
+        Boolean passed = validationEngine.validate(ExecutionHistory.ApiType.COLLECTION, r.getId(),
+                history.getId(), response.getBody());
+        Boolean businessOk = businessValidationService.autoCheck(config, collection.getProjectId(),
+                com.automationportal.apitesting.validation.BusinessValidationRun.ApiType.COLLECTION, r.getId(),
+                "auto:MANUAL", history.getId());
+        Boolean combined = com.automationportal.apitesting.validation.BusinessValidationService.combine(passed, businessOk);
+        if (combined != null) {
+            executionHistoryService.markValidation(history, combined);
+        }
+
         return response;
     }
 

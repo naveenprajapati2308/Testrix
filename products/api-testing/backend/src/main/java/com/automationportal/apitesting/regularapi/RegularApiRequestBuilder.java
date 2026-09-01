@@ -35,6 +35,7 @@ public class RegularApiRequestBuilder {
         req.setBodyType(parseBodyType(api.getBodyType()));
         req.setBody(api.getBodyTemplate());
         req.setFormData(configMapper.formDataItems(api.getFormDataTemplate()));
+        req.setRequiredPayloadFields(configMapper.keyValues(api.getRequiredPayloadFieldsTemplate()));
         req.setAuth(configMapper.auth(api.getAuthConfig()));
         req.setTimeoutMs(api.getTimeoutMs());
         req.setFollowRedirects(api.isFollowRedirects());

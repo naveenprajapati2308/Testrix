@@ -1,6 +1,8 @@
 package com.automationportal.apitesting.history;
 
 import com.automationportal.apitesting.security.CurrentProjectService;
+import com.automationportal.apitesting.validation.BusinessValidationService;
+import com.automationportal.apitesting.validation.FieldValidationResult;
 import com.automationportal.apitesting.validation.ValidationResultRepository;
 import com.automationportal.apitesting.validation.ValidationResultView;
 import lombok.Data;
@@ -23,6 +25,7 @@ public class HistoryController {
     private final ExecutionHistoryRepository repository;
     private final ValidationResultRepository validationResultRepository;
     private final BodyStore bodyStore;
+    private final BusinessValidationService businessValidationService;
     private final CurrentProjectService currentProjectService;
 
     @GetMapping
@@ -69,6 +72,7 @@ public class HistoryController {
         private ExecutionHistory execution;
         private String responseBody;
         private List<ValidationResultView> validationResults;
+        private List<FieldValidationResult> requiredFieldResults;
     }
 
     @GetMapping("/{id}")
@@ -84,6 +88,7 @@ public class HistoryController {
                 ? h.getResponseBodyInline()
                 : (h.getResponseBodyObjectKey() != null ? bodyStore.load(h.getResponseBodyObjectKey()) : null));
         d.setValidationResults(validationResultRepository.findViewsByExecutionId(id));
+        d.setRequiredFieldResults(businessValidationService.findByExecutionHistoryId(id));
         return d;
     }
 }
