@@ -9,8 +9,24 @@ export default function KeyValueEditor({ items, onChange, keyPlaceholder = 'Key'
   const remove = (idx) => onChange(items.filter((_, i) => i !== idx));
   const add = () => onChange([...items, showRequired ? { key: '', value: '', enabled: true, required: false } : { key: '', value: '', enabled: true }]);
 
+  const allRequired = showRequired && items.length > 0 && items.every((it) => it.required);
+  const toggleAllRequired = (checked) => onChange(items.map((it) => ({ ...it, required: checked })));
+
   return (
     <div className="flex flex-col divide-y divide-[var(--border)] border border-[var(--border)] rounded-md overflow-hidden">
+      {showRequired && items.length > 0 && (
+        <div className="flex items-center justify-end bg-[var(--bg-surface-1)] px-2 py-1">
+          <label className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Mark all rows as required / not required">
+            <input
+              type="checkbox"
+              checked={allRequired}
+              onChange={(e) => toggleAllRequired(e.target.checked)}
+              className="accent-[var(--warning-text)]"
+            />
+            All Req
+          </label>
+        </div>
+      )}
       {items.map((item, idx) => (
         <div key={idx} className="flex items-center bg-[var(--bg-surface-2)]">
           <input

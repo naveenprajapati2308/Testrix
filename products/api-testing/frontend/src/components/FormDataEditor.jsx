@@ -23,6 +23,9 @@ export default function FormDataEditor({ items, onChange }) {
   const remove = (idx) => onChange(items.filter((_, i) => i !== idx));
   const add = () => onChange([...items, { key: '', value: '', enabled: true, type: 'TEXT', fileId: '', fileName: '', required: false }]);
 
+  const allRequired = items.length > 0 && items.every((it) => it.required);
+  const toggleAllRequired = (checked) => onChange(items.map((it) => ({ ...it, required: checked })));
+
   const setType = (idx, type) => {
     const next = items.map((it, i) => (i === idx ? { ...it, type, value: '', fileId: '', fileName: '' } : it));
     onChange(next);
@@ -58,6 +61,19 @@ export default function FormDataEditor({ items, onChange }) {
     <div className="flex flex-col gap-2">
       <input ref={fileInputRef} type="file" className="hidden" onChange={onFileSelected} />
       <div className="flex flex-col divide-y divide-[var(--border)] border border-[var(--border)] rounded-md overflow-hidden">
+        {items.length > 0 && (
+          <div className="flex items-center justify-end bg-[var(--bg-surface-1)] px-2 py-1">
+            <label className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Mark all rows as required / not required">
+              <input
+                type="checkbox"
+                checked={allRequired}
+                onChange={(e) => toggleAllRequired(e.target.checked)}
+                className="accent-[var(--warning-text)]"
+              />
+              All Req
+            </label>
+          </div>
+        )}
         {items.map((item, idx) => (
           <div key={idx} className="flex items-center bg-[var(--bg-surface-2)]">
             <input

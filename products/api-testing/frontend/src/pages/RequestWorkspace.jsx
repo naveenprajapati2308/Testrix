@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Save, ChevronLeft, Plus, Folder } from 'lucide-react';
+import { Send, Save, ChevronLeft, Plus, Folder, Eraser } from 'lucide-react';
 import { Loader } from '../../../../../shared/ui/Loader.jsx';
 import { apiClient } from '../api/client.js';
 import axios from 'axios';
@@ -52,6 +52,7 @@ export default function RequestWorkspace() {
   const [folderId, setFolderId] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const executeAbortRef = useRef(null);
+  const responseRef = useRef(null);
 
   const { data: existing } = useQuery({
     queryKey: ['collection-request', collectionId, requestId],
@@ -163,6 +164,17 @@ export default function RequestWorkspace() {
     }
   };
 
+  useEffect(() => {
+    if (response && !response.success) {
+      responseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [response]);
+
+  const clearPayload = () => {
+    if (bodyType === 'FORM_DATA') setFormData([]);
+    else setBody('');
+  };
+
   return (
     <div className="flex flex-col">
       {/* Header */}
@@ -228,13 +240,20 @@ export default function RequestWorkspace() {
             {builderSubTab === 'Headers' && <KeyValueEditor items={headers} onChange={setHeaders} keyPlaceholder="Header" showRequired />}
             {builderSubTab === 'Body' && (
               <div className="h-full flex flex-col gap-2">
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
                   {BODY_TYPES.map((bt) => (
                     <button key={bt} onClick={() => setBodyType(bt)}
                       className={`px-2.5 py-1 rounded text-[11px] ${bodyType === bt ? 'bg-[var(--accent-bg-soft)] text-[var(--accent-text)] border border-[var(--accent-border-soft)]' : 'text-[var(--text-muted)] border border-[var(--border)] hover:text-[var(--text-secondary)]'}`}>
                       {bt === 'FORM_URLENCODED' ? 'x-www-form-urlencoded' : bt === 'FORM_DATA' ? 'form-data' : bt}
                     </button>
                   ))}
+                  {bodyType !== 'NONE' && (
+                    <button onClick={clearPayload}
+                      title="Clear payload"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded text-[11px] text-[var(--text-muted)] border border-[var(--border)] hover:text-[var(--danger-text)] hover:border-[var(--danger-border-soft)] ml-1">
+                      <Eraser size={11} /> Clear
+                    </button>
+                  )}
                 </div>
                 {bodyType === 'FORM_DATA' && (
                   <div className="flex-1 min-h-0 overflow-auto">
@@ -268,7 +287,9 @@ export default function RequestWorkspace() {
           </div>
         )}
 
-        <ResponseViewer response={response} loading={loading} />
+        <div ref={responseRef}>
+          <ResponseViewer response={response} loading={loading} />
+        </div>
 
         {/* History for this specific API — pinned at the bottom, collapsible.
             Unrelated to the sidebar's global History page. */}
