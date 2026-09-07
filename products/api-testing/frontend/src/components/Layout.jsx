@@ -9,7 +9,7 @@ const NAV = [
   { to: '/tester', label: 'API Tester', icon: Send },
   { to: '/base-apis', label: 'Base APIs', icon: Database },
   { to: '/regular-apis', label: 'Regular APIs', icon: Workflow },
-  { to: '/scheduler', label: 'Scheduler', icon: CalendarClock },
+  { to: '/scheduler', label: 'Groups & Scheduler', icon: CalendarClock },
   { to: '/history', label: 'History', icon: History },
   { to: '/reports', label: 'Reports', icon: FileBarChart },
   { to: '/modules', label: 'Modules', icon: FolderTree },

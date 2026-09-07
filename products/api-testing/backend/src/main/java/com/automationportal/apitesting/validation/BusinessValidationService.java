@@ -58,7 +58,7 @@ public class BusinessValidationService {
         List<FieldRef> required = collectRequired(baseConfig);
         if (required.isEmpty()) {
             throw new IllegalArgumentException(
-                    "No fields are marked Required — mark at least one field before running a validation check.");
+                    "No fields are marked as  Required — mark at least one field before running a validation check.");
         }
 
         List<FieldRef> headerFields = required.stream().filter(r -> "HEADER".equals(r.source)).toList();

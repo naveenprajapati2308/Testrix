@@ -4,7 +4,7 @@ export const API_TESTING_NAV = [
   { key: 'tester', label: 'Test APIs', icon: 'Send', path: '/tester' },
   { key: 'base-apis', label: 'Base APIs', icon: 'Database', path: '/base-apis' },
   { key: 'regular-apis', label: 'Regular APIs', icon: 'Workflow', path: '/regular-apis' },
-  { key: 'scheduler', label: 'Scheduler', icon: 'CalendarClock', path: '/scheduler' },
+  { key: 'scheduler', label: 'Groups & Scheduler', icon: 'CalendarClock', path: '/scheduler' },
   { key: 'reports', label: 'Reports', icon: 'FileText', path: '/reports' },
   { key: 'history', label: 'History', icon: 'History', path: '/history' },
   { key: 'modules', label: 'Modules', icon: 'FolderTree', path: '/modules' }

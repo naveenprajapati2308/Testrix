@@ -19,9 +19,7 @@ const TRUNCATE_LEN = 1500;
 const truncate = (s) =>
   typeof s === "string" && s.length > TRUNCATE_LEN ? s.slice(0, TRUNCATE_LEN) + "…(truncated)" : s;
 
-// Every backend's own JwtAuthenticationFilter/JwtValidationFilter derives the caller's
-// project from this same token, so forwarding it here — never a service credential —
-// is what makes every call below automatically respect that user's own project scoping.
+
 async function fetchJson(url, token) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) {
@@ -347,7 +345,7 @@ function parseFailedGeneration(text) {
 // daily quota is exhausted, retrying the exact same request on a different free model has its
 // own, still-fresh budget. This keeps the assistant answering instead of hard-failing for
 // however many hours remain until the primary model's quota resets.
-const FALLBACK_MODEL = "llama-3.1-8b-instant";
+const FALLBACK_MODEL = "openai/gpt-oss-20b";
 
 async function createCompletion(payload) {
   try {
@@ -398,9 +396,17 @@ You have four tools:
 - search_testrix(query, scope?): find a specific execution, module, collection, API, schedule, or test by name inside the user's own Testrix project.
 - get_analytics_summary(product?, range?): aggregate stats/trends/pass-rates for Automation, API Testing, and/or Performance Testing.
 - get_failure_details(product, id?, limit?): recent failures for a product, or full error/stack-trace detail for one specific execution/history/run.
-- webSearch(query): general internet knowledge — only for things NOT about the user's own Testrix data (e.g. framework docs, general how-to questions).
+- webSearch(query): background knowledge needed to support a Testrix question only (e.g. what a framework error message means, testing best practices) — never for topics unrelated to Testrix or software testing.
 
 Every Testrix tool result is already scoped to the user's own current project — never ask which project they mean, and never claim to see other projects' data. Prefer the Testrix tools over webSearch whenever the question is about the user's own tests, executions, runs, or results. Answer directly when you already know the answer; otherwise pick the right tool. Do not mention tool names to the user.
+
+How to answer:
+- Never return raw numbers/lists on their own. After any data (from a tool or from the conversation), add a short insight in plain language: what it means, whether it's good/bad/normal, and what stands out (e.g. "Pass rate dropped 12% vs last week, driven mostly by API Testing failures").
+- Ground every number, name, and trend you state strictly in what a tool result actually returned — never invent or guess a figure, module name, or comparison that isn't in the data. If a tool result field is null, empty, or missing, say plainly that there's no data available for that (e.g. "No automation data found for the last 7 days — this could mean no runs happened, or the service is temporarily unreachable"), and stop there instead of making something up.
+- If the user asks what to do about an insight (a failing test, a dropping pass rate, a slow response time, an error), give a concrete, actionable suggestion grounded in the actual failure detail/analytics returned — not generic advice.
+- If the user only shares an observation without asking for a fix, offer one proactively in one short line, and let them ask to go deeper.
+
+Scope restriction: you only discuss the Testrix platform — the user's tests, executions, runs, reports, failures, analytics, and how to use Testrix's own features. If the user asks something with no connection to Testrix or their testing data (general knowledge, personal advice, coding help unrelated to Testrix, other tools/products, casual chit-chat, etc.), politely decline in one line and steer back, e.g. "I can only help with your Testrix data and testing questions — ask me about your executions, reports, or failures." Do not use webSearch to answer an out-of-scope question.
 
 Current date and time: ${new Date().toLocaleString()}.`,
     },
@@ -420,7 +426,7 @@ Current date and time: ${new Date().toLocaleString()}.`,
     count++;
     const completions = await createCompletion({
       temperature: 0,
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       messages,
       tools: TOOLS,
       tool_choice: "auto",

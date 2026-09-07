@@ -80,7 +80,7 @@ const Container = () => {
       return data.message;
     } catch (error) {
       console.error("Failed to connect to the server:", error);
-      return "Unable to connect to the chat server. Please make sure the backend is running.";
+      return "we are unable to process your request at the moment. Please try again later.";
     }
   };
   return (
@@ -89,12 +89,12 @@ const Container = () => {
       <div className="flex items-center gap-3 py-6 border-b border-neutral-800 sticky top-0 bg-neutral-900/90 backdrop-blur-md z-10">
         <div className="relative">
           <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white text-lg shadow-md shadow-indigo-500/20">
-            N
+
           </div>
           <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-neutral-900 rounded-full"></span>
         </div>
         <div>
-          <h2 className="font-semibold text-white tracking-wide">Neeraj AI</h2>
+          <h2 className="font-semibold text-white tracking-wide">Testrix AI</h2>
           <p className="text-xs text-neutral-400 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             Online & Ready
