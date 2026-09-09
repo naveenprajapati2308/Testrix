@@ -96,11 +96,22 @@ portal:
     console-only: ${PORTAL_MAIL_CONSOLE_ONLY:false}
   uploads:
     profiles-dir: ${PORTAL_PROFILES_DIR:${PORTAL_AUTOMATION_ARTIFACTS_ROOT:artifacts}/profiles}
+
+cors:
+  # Comma-separated browser origins allowed to call this API directly, bypassing the gateway.
+  # The gateway serves every frontend+API same-origin, so this only matters for direct-port
+  # access (dev tools, a future non-gateway client) — add the real production domain here once
+  # one exists, e.g. CORS_ALLOWED_ORIGINS=https://testrix.in,http://localhost:15000
+  # Left blank (not a hardcoded default here) on purpose — Spring's ${X:default} only falls
+  # back when X is entirely unset, not when Compose passes it through as an empty string, so
+  # the real default list lives in SecurityConfig.corsConfigurationSource() instead.
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   superadmin:
     # Only applied the first time the Super Admin account is created — an existing account's
     # password is never touched on restart, so changing this has no effect on an already-seeded
-    # database. Defaults to the legacy dev value so nothing changes unless this is set.
-    seed-password: ${PORTAL_SUPERADMIN_SEED_PASSWORD:password}
+    # database. No insecure fallback on purpose — see events.api-key above. Startup fails if
+    # unset, so a fresh install can never seed the well-known literal "password".
+    seed-password: ${PORTAL_SUPERADMIN_SEED_PASSWORD}
     # The one Super Admin identity, platform-wide. No insecure fallback on purpose — see
     # events.api-key above. DataSeeder both seeds and self-heals an existing account's
     # username/email to match this on every boot.

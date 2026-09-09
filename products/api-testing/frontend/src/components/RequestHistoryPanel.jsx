@@ -12,7 +12,7 @@ export default function RequestHistoryPanel({ requestId }) {
   const [collapsed, setCollapsed] = useState(false);
   const [detailId, setDetailId] = useState(null);
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isLoading, refetch } = useQuery({
     queryKey: ['collection-request-history', requestId],
     queryFn: async () => (await apiClient.get('/v1/history', {
       params: { apiType: 'COLLECTION', apiId: requestId, size: 25 },
@@ -67,6 +67,9 @@ export default function RequestHistoryPanel({ requestId }) {
               </tr>
             </thead>
             <tbody>
+              {isLoading ? (
+                <tr><td colSpan={5} className="px-4 py-4"><div className="flex justify-center"><Loader size={18} /></div></td></tr>
+              ) : (<>
               {records.map((r) => (
                 <tr key={r.id} onClick={() => setDetailId(r.id)}
                   className="border-b border-[var(--border-soft)] hover:bg-[var(--bg-hover)] cursor-pointer">
@@ -87,6 +90,7 @@ export default function RequestHistoryPanel({ requestId }) {
               {records.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-4 text-center text-[var(--text-muted)]">No runs yet</td></tr>
               )}
+              </>)}
             </tbody>
           </table>
         </div>

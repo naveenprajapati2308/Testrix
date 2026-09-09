@@ -20,7 +20,7 @@ export default function History() {
   const [groupRunPage, setGroupRunPage] = useState(0);
   const [groupRunPageSize, setGroupRunPageSize] = useState(10);
 
-  const { data } = useQuery({
+  const { data, isLoading: historyLoading } = useQuery({
     queryKey: ['history', page, pageSize, filters],
     queryFn: async () => (await apiClient.get('/v1/history', {
       params: {
@@ -47,7 +47,7 @@ export default function History() {
     queryFn: async () => (await apiClient.get('/v1/groups')).data,
   });
 
-  const { data: groupRuns } = useQuery({
+  const { data: groupRuns, isLoading: groupRunsLoading } = useQuery({
     queryKey: ['group-runs', groupRunPage, groupRunPageSize],
     queryFn: async () => (await apiClient.get('/v1/groups/executions', { params: { page: groupRunPage, size: groupRunPageSize } })).data,
     enabled: view === 'groupRuns',
@@ -141,6 +141,9 @@ export default function History() {
               </tr>
             </thead>
             <tbody>
+              {groupRunsLoading ? (
+                <tr><td colSpan={8} className="px-4 py-8"><div className="flex justify-center"><Loader size={22} /></div></td></tr>
+              ) : (<>
               {(groupRuns?.content ?? []).map((r) => (
                 <tr key={r.id} onClick={() => openGroupRun(r.id)}
                   className="border-b border-[var(--border-soft)] hover:bg-[var(--bg-hover)] cursor-pointer">
@@ -166,6 +169,7 @@ export default function History() {
               {(groupRuns?.content ?? []).length === 0 && (
                 <tr><td colSpan={8} className="px-4 py-6 text-center text-[var(--text-muted)]">No group runs yet — execute a group from the Scheduler tab</td></tr>
               )}
+              </>)}
             </tbody>
           </table>
           <div className="px-4">
@@ -193,6 +197,9 @@ export default function History() {
             </tr>
           </thead>
           <tbody>
+            {historyLoading ? (
+              <tr><td colSpan={9} className="px-4 py-8"><div className="flex justify-center"><Loader size={22} /></div></td></tr>
+            ) : (<>
             {records.map((r) => (
               <Fragment key={r.id}>
               <tr onClick={() => setDetailId(detailId === r.id ? null : r.id)}
@@ -235,6 +242,7 @@ export default function History() {
             {records.length === 0 && (
               <tr><td colSpan={9} className="px-4 py-6 text-center text-[var(--text-muted)]">No executions match</td></tr>
             )}
+            </>)}
           </tbody>
         </table>
       </div>

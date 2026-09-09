@@ -11,7 +11,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/performance-tests")
 @RequiredArgsConstructor
-@CrossOrigin
 public class PerformanceTestController {
 
     private final PerformanceTestService service;

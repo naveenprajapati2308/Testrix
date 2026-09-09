@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api.js';
 import { Panel } from '../shared/index.jsx';
+import { Loader } from '../../../../../shared/ui/Loader.jsx';
 
 
 export function RoleManagement({ setNotice }) {
   const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.adminListRoles().then(setRoles).catch((e) => setNotice(e.message));
+    api.adminListRoles().then(setRoles).catch((e) => setNotice(e.message)).finally(() => setLoading(false));
   }, []);
 
   return (
@@ -16,6 +18,9 @@ export function RoleManagement({ setNotice }) {
         <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
           {roles.length} role{roles.length !== 1 ? 's' : ''} defined platform-wide. Every workspace's Project Admin assigns these to their own team from Team Management — roles are never created or granted from here.
         </p>
+        {loading ? (
+          <Loader size={28} label="Loading roles…" />
+        ) : (
         <div className="role-mgmt-grid">
           {roles.map((role) => (
             <div key={role.code} className="role-mgmt-card">
@@ -27,6 +32,7 @@ export function RoleManagement({ setNotice }) {
             </div>
           ))}
         </div>
+        )}
       </Panel>
     </section>
   );

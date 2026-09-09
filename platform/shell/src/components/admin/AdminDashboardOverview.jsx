@@ -5,6 +5,7 @@ import { Card } from '../../../../../shared/ui/dashboard/Card.jsx';
 import { StatusMixDonut } from '../../../../../shared/ui/dashboard/StatusMixDonut.jsx';
 import { Table } from '../../../../../shared/ui/dashboard/Table.jsx';
 import { EmptyState } from '../../../../../shared/ui/dashboard/EmptyState.jsx';
+import { Loader } from '../../../../../shared/ui/Loader.jsx';
 import { HealthDot, OverviewCard } from '../shared/OverviewCard.jsx';
 
 // Real health pings, same gateway routes the Global Dashboard already polls — never a fabricated
@@ -36,12 +37,13 @@ export function AdminDashboardOverview({ setNotice, setActive }) {
   const [recentRequests, setRecentRequests] = useState([]);
   const [health, setHealth] = useState({});
   const [healthChecked, setHealthChecked] = useState(false);
+  const [recentRequestsLoading, setRecentRequestsLoading] = useState(true);
 
   useEffect(() => {
     api.adminListUsers().then(setUsers).catch((err) => setNotice(err.message));
     api.adminListProjects().then(setProjects).catch((err) => setNotice(err.message));
     api.adminListWorkspaceRequests('PENDING').then(setPendingRequests).catch((err) => setNotice(err.message));
-    api.adminListWorkspaceRequests().then((r) => setRecentRequests(r.slice(0, 5))).catch(() => {});
+    api.adminListWorkspaceRequests().then((r) => setRecentRequests(r.slice(0, 5))).catch(() => {}).finally(() => setRecentRequestsLoading(false));
 
     Promise.allSettled(
       HEALTH_CHECKS.filter((h) => h.path).map((h) =>
@@ -151,7 +153,9 @@ export function AdminDashboardOverview({ setNotice, setActive }) {
           <span><ClipboardList size={15} /> Recent Workspace Requests</span>
           <button type="button" className="link-btn" onClick={() => setActive('workspace-requests')}>View All</button>
         </h3>
-        {recentRequests.length === 0 ? (
+        {recentRequestsLoading ? (
+          <Loader size={28} label="Loading requests…" />
+        ) : recentRequests.length === 0 ? (
           <EmptyState message="No workspace requests yet." />
         ) : (
           <Table>

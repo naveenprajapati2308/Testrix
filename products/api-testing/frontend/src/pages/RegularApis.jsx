@@ -42,8 +42,8 @@ export default function RegularApis() {
   const [regularTesting, setRegularTesting] = useState(false);
   const [manualExtraction, setManualExtraction] = useState({ sourceJsonPath: '', variableName: '' });
 
-  const { data: apis = [] } = useQuery({ queryKey: ['regular-apis'], queryFn: async () => (await apiClient.get('/v1/regular-apis')).data });
-  const { data: modules = [] } = useQuery({ queryKey: ['modules'], queryFn: async () => (await apiClient.get('/v1/modules')).data });
+  const { data: apis = [], isLoading: apisLoading } = useQuery({ queryKey: ['regular-apis'], queryFn: async () => (await apiClient.get('/v1/regular-apis')).data });
+  const { data: modules = [], isLoading: modulesLoading } = useQuery({ queryKey: ['modules'], queryFn: async () => (await apiClient.get('/v1/modules')).data });
   const { data: baseApis = [] } = useQuery({ queryKey: ['base-apis'], queryFn: async () => (await apiClient.get('/v1/base-apis')).data });
   const { data: bindings = [] } = useQuery({
     queryKey: ['regular-bindings', selectedId],
@@ -227,6 +227,7 @@ export default function RegularApis() {
             apis={apis}
             selectedId={selectedId}
             onSelect={select}
+            loading={apisLoading || modulesLoading}
             emptyMessage="No regular APIs yet."
             renderItem={(a) => (
               <>

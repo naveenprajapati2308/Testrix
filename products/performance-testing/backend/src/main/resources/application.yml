@@ -71,6 +71,12 @@ security:
     # startup fails if unset.
     secret: ${PORTAL_JWT_SECRET}
 
+cors:
+  # Comma-separated browser origins allowed to call this API directly, bypassing the gateway —
+  # same pattern as automation-portal's SecurityConfig. Left blank on purpose (see that file's
+  # application.yml comment) — the real default list lives in corsConfigurationSource() below.
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
 management:
   endpoints:
     web:

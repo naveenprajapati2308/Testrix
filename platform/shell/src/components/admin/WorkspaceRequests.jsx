@@ -14,13 +14,17 @@ const MODULE_LABELS = {
 // Project Admin account; reject stores a reason and allows the requester to resubmit later. ──────
 export function WorkspaceRequests({ setNotice }) {
   const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [rejectTarget, setRejectTarget] = useState(null);
   const [approveTarget, setApproveTarget] = useState(null);
   const [approvalResult, setApprovalResult] = useState(null);
   const [isApproving, setIsApproving] = useState(false);
 
-  const load = () => api.adminListWorkspaceRequests(statusFilter || undefined).then(setRequests).catch((e) => setNotice(e.message));
+  const load = () => {
+    setLoading(true);
+    return api.adminListWorkspaceRequests(statusFilter || undefined).then(setRequests).catch((e) => setNotice(e.message)).finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, [statusFilter]);
 
   const confirmApprove = async () => {
@@ -79,7 +83,7 @@ export function WorkspaceRequests({ setNotice }) {
             <option value="REJECTED">Rejected</option>
           </select>
         </div>
-        <DataTable columns={columns} data={requests} searchPlaceholder="Filter requests..." exportFilename="workspace_requests.csv" />
+        <DataTable columns={columns} data={requests} loading={loading} searchPlaceholder="Filter requests..." exportFilename="workspace_requests.csv" />
       </Panel>
 
       {approveTarget && (

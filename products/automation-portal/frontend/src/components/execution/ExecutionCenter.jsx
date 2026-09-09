@@ -36,6 +36,7 @@ export function ExecutionCenter({
   setSelectedTagFilter,
   run,
   executions,
+  executionsLoading = false,
   onSelectExecution,
   onRefresh
 }) {
@@ -852,6 +853,7 @@ export function ExecutionCenter({
         <DataTable
           columns={queueColumns}
           data={executions}
+          loading={executionsLoading}
           searchPlaceholder="Filter execution history..."
           exportFilename="executions.csv"
         />

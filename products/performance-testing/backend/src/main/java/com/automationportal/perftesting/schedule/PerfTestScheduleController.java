@@ -11,7 +11,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/schedules")
 @RequiredArgsConstructor
-@CrossOrigin
 public class PerfTestScheduleController {
 
     private final PerfTestScheduleService service;

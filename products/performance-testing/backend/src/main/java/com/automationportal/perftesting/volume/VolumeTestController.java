@@ -10,7 +10,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/volume-tests")
 @RequiredArgsConstructor
-@CrossOrigin
 public class VolumeTestController {
 
     private final VolumeTestService service;

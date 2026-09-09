@@ -26,7 +26,7 @@ public class DataSeeder implements CommandLineRunner {
     public DataSeeder(UserRepository userRepository, ModuleSyncService moduleSyncService,
                       EnvironmentRepository environmentRepository, CurrentProjectService currentProjectService,
                       PasswordEncoder passwordEncoder,
-                      @Value("${portal.superadmin.seed-password:password}") String superAdminSeedPassword,
+                      @Value("${portal.superadmin.seed-password}") String superAdminSeedPassword,
                       @Value("${portal.superadmin.email}") String superAdminEmail) {
         this.userRepository = userRepository;
         this.moduleSyncService = moduleSyncService;

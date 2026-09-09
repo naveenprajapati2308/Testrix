@@ -191,9 +191,9 @@ nav button.active svg {
 .sidebar-footer {
   flex: 0 0 auto;
   display: grid;
-  gap: 7px;
-  padding-top: 14px;
-  margin-top: 14px;
+  gap: 0px;
+  padding-top: 10px;
+  margin-top: 10px;
   border-top: 1px solid var(--sidebar-edge);
 }
 

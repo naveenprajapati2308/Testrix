@@ -43,6 +43,7 @@ function validateEdit(form) {
 // ── User Management Page ───────────────────────────────────────────────────────
 export function UserManagement({ setNotice }) {
   const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [resetTarget, setResetTarget] = useState(null);
@@ -57,7 +58,10 @@ export function UserManagement({ setNotice }) {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 8;
 
-  const loadUsers = () => api.adminListUsers().then(setUsers).catch((e) => setNotice(e.message));
+  const loadUsers = () => {
+    setLoading(true);
+    return api.adminListUsers().then(setUsers).catch((e) => setNotice(e.message)).finally(() => setLoading(false));
+  };
   useEffect(() => { loadUsers(); }, []);
 
   const changeRole = async (id, role) => {
@@ -190,6 +194,7 @@ export function UserManagement({ setNotice }) {
         <DataTable
           columns={columns}
           data={usersWithIndices}
+          loading={loading}
           searchPlaceholder="Filter users..."
           exportFilename="users_list.csv"
         />

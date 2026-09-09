@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, auth } from '../../api.js';
 import { Field } from '../shared/Field.jsx';
 import { Panel, DataTable, Modal, ConfirmDialog } from '../shared/index.jsx';
+import { Loader } from '../../../../../shared/ui/Loader.jsx';
 
 export const MODULE_LABELS = {
   API_TESTING: 'API Testing',
@@ -36,11 +37,15 @@ export function WorkspaceSettings({ setNotice }) {
   const [issuedCredential, setIssuedCredential] = useState(null);
   const [disableEngine, setDisableEngine] = useState(null);
   const [revokeEngineTarget, setRevokeEngineTarget] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const load = () => {
-    api.workspaceSettings(project.id).then((s) => { setSettings(s); setProfileForm(s); }).catch((e) => setNotice(e.message));
-    api.environments().then(setEnvironments).catch((e) => setNotice(e.message));
-    api.testEngines().then(setTestEngines).catch((e) => setNotice(e.message));
+    setLoading(true);
+    return Promise.allSettled([
+      api.workspaceSettings(project.id).then((s) => { setSettings(s); setProfileForm(s); }).catch((e) => setNotice(e.message)),
+      api.environments().then(setEnvironments).catch((e) => setNotice(e.message)),
+      api.testEngines().then(setTestEngines).catch((e) => setNotice(e.message))
+    ]).finally(() => setLoading(false));
   };
   useEffect(() => { if (project) load(); }, []);
 
@@ -237,7 +242,9 @@ export function WorkspaceSettings({ setNotice }) {
                 <span className="um-count">{testEngines.length} engine{testEngines.length !== 1 ? 's' : ''}</span>
               </div>
 
-              {testEngines.length === 0 ? (
+              {loading ? (
+                <Loader size={24} label="Loading test engines…" />
+              ) : testEngines.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 10 }}>
                   No Test Engine registered yet — runs for this workspace still use the platform's legacy shared
                   connection. Register one to get an isolated, per-workspace credential.
@@ -306,7 +313,7 @@ export function WorkspaceSettings({ setNotice }) {
           </button>
           <span className="um-count">{environments.length} environment{environments.length !== 1 ? 's' : ''}</span>
         </div>
-        <DataTable columns={envColumns} data={environments} searchPlaceholder="Filter environments..." exportFilename="workspace_environments.csv" />
+        <DataTable columns={envColumns} data={environments} loading={loading} searchPlaceholder="Filter environments..." exportFilename="workspace_environments.csv" />
       </Panel>
 
       {showCreateEnv && (

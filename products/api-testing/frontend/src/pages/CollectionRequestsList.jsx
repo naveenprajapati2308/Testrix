@@ -12,6 +12,7 @@ import { ModalOverlay } from '../components/ModalOverlay.jsx';
 import { Pagination } from '../components/Pagination.jsx';
 import { INPUT_CLASS as inputCls, methodColor, CLASS_COLORS } from '../lib/statusColors.js';
 import { downloadFrom } from '../lib/download.js';
+import { Loader } from '../../../../../shared/ui/Loader.jsx';
 
 const GRID_COLS = 'grid grid-cols-[1fr_90px_1.2fr_140px_160px_90px] gap-2 items-center';
 
@@ -56,12 +57,12 @@ export default function CollectionRequestsList() {
   });
   const collection = collections.find((c) => String(c.id) === collectionId);
 
-  const { data: requests = [], isFetching: requestsFetching, refetch: refetchRequests } = useQuery({
+  const { data: requests = [], isFetching: requestsFetching, isLoading: requestsLoading, refetch: refetchRequests } = useQuery({
     queryKey: ['collection-requests', collectionId],
     queryFn: async () => (await apiClient.get(`/v1/collections/${collectionId}/requests`)).data,
   });
 
-  const { data: folderTree = [] } = useQuery({
+  const { data: folderTree = [], isLoading: foldersLoading } = useQuery({
     queryKey: ['collection-folders', collectionId],
     queryFn: async () => (await apiClient.get(`/v1/collections/${collectionId}/folders`)).data,
   });
@@ -297,10 +298,16 @@ export default function CollectionRequestsList() {
         <div className={`${GRID_COLS} px-4 py-2.5 border-b border-[var(--border)] text-[var(--text-muted)] text-xs font-medium`}>
           <span>API Name</span><span>Method</span><span>Path</span><span>Response Status</span><span>Last Run</span><span></span>
         </div>
-        {rootFolders.map((f) => <FolderSection key={f.id} folder={f} />)}
-        {pagedRootRequests.map((r) => <RequestRow key={r.id} r={r} depth={0} />)}
-        {rootFolders.length === 0 && rootRequests.length === 0 && (
-          <div className="px-4 py-8 text-center text-xs text-[var(--text-muted)]">No requests yet — click "New Request" to build one</div>
+        {(requestsLoading || foldersLoading) ? (
+          <div className="px-4 py-8 flex justify-center"><Loader size={24} label="Loading requests…" /></div>
+        ) : (
+          <>
+            {rootFolders.map((f) => <FolderSection key={f.id} folder={f} />)}
+            {pagedRootRequests.map((r) => <RequestRow key={r.id} r={r} depth={0} />)}
+            {rootFolders.length === 0 && rootRequests.length === 0 && (
+              <div className="px-4 py-8 text-center text-xs text-[var(--text-muted)]">No requests yet — click "New Request" to build one</div>
+            )}
+          </>
         )}
       </div>
 

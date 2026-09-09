@@ -166,6 +166,10 @@ export function App() {
   const [environments, setEnvironments] = useState([]);
   const [modules, setModules] = useState([]);
   const [executions, setExecutions] = useState([]);
+  // True only until the very first executions fetch resolves — lets ExecutionCenter show a
+  // loading skeleton instead of its "no executions yet" empty state during that initial window,
+  // without flickering back to true on the periodic 10s auto-refresh below.
+  const [executionsLoading, setExecutionsLoading] = useState(true);
   // 'checking' | 'needed' | 'done' — whether this project has at least one active Test Engine
   // with its own framework path set. Determined in refresh() below, alongside everything else
   // it already loads on boot.
@@ -295,6 +299,7 @@ export function App() {
     setBootLoader('show');
     const startedAt = Date.now();
     refresh(true).finally(() => {
+      setExecutionsLoading(false);
       const holdFor = Math.max(0, 1500 - (Date.now() - startedAt));
       setTimeout(() => {
         setBootLoader('exit');
@@ -414,6 +419,7 @@ export function App() {
           setSelectedTagFilter={setSelectedTagFilter}
           run={run}
           executions={executions}
+          executionsLoading={executionsLoading}
           onSelectExecution={setSelectedExecutionId}
           onRefresh={refresh}
         />

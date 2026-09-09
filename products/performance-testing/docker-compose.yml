@@ -23,6 +23,7 @@ services:
       PERF_QUEUE_MAX_CONCURRENT: ${PERF_MAX_CONCURRENT:-3}
       PERF_QUEUE_JOB_TIMEOUT: ${PERF_JOB_TIMEOUT_MINUTES:-60}
       PORTAL_JWT_SECRET: ${PORTAL_JWT_SECRET:?PORTAL_JWT_SECRET must be set in .env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     volumes:
       - performance_testing_k6_runs:/app/k6-runs
     ports:

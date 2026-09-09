@@ -13,9 +13,13 @@ const MODULE_LABELS = {
 // ── Super Admin: platform-wide view of every provisioned Project (= Workspace). ────────────────
 export function ProjectManagement({ setNotice }) {
   const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const load = () => api.adminListProjects().then(setProjects).catch((e) => setNotice(e.message));
+  const load = () => {
+    setLoading(true);
+    return api.adminListProjects().then(setProjects).catch((e) => setNotice(e.message)).finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, []);
 
   const handleDelete = async () => {
@@ -86,7 +90,7 @@ export function ProjectManagement({ setNotice }) {
         <div className="um-toolbar">
           <span className="um-count"><FolderKanban size={15} style={{ verticalAlign: 'middle', marginRight: 6 }} />{projects.length} project{projects.length !== 1 ? 's' : ''}</span>
         </div>
-        <DataTable columns={columns} data={projects} searchPlaceholder="Filter projects..." exportFilename="projects_list.csv" />
+        <DataTable columns={columns} data={projects} loading={loading} searchPlaceholder="Filter projects..." exportFilename="projects_list.csv" />
       </Panel>
 
       {deleteTarget && (

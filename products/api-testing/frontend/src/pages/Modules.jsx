@@ -4,6 +4,7 @@ import { Trash2, Plus, Pencil, FolderTree, CornerDownRight } from 'lucide-react'
 import { apiClient } from '../api/client.js';
 import { Button } from '../components/Button.jsx';
 import { INPUT_CLASS as inputCls } from '../lib/statusColors.js';
+import { Loader } from '../../../../../shared/ui/Loader.jsx';
 
 function ModuleNode({ node, depth, onDelete, onEdit }) {
   return (
@@ -26,7 +27,7 @@ export default function Modules() {
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
 
-  const { data: modules = [] } = useQuery({
+  const { data: modules = [], isLoading: modulesLoading } = useQuery({
     queryKey: ['modules'],
     queryFn: async () => (await apiClient.get('/v1/modules')).data,
   });
@@ -131,8 +132,14 @@ export default function Modules() {
       {error && <div className="text-xs text-[var(--danger-text)]">{error}</div>}
 
       <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-1">
-        {modules.map((m) => <ModuleNode key={m.id} node={m} depth={0} onDelete={(id) => deleteMut.mutate(id)} onEdit={startEdit} />)}
-        {modules.length === 0 && <div className="py-4 text-center text-xs text-[var(--text-muted)]">No modules yet</div>}
+        {modulesLoading ? (
+          <div className="py-4 flex justify-center"><Loader size={22} /></div>
+        ) : (
+          <>
+            {modules.map((m) => <ModuleNode key={m.id} node={m} depth={0} onDelete={(id) => deleteMut.mutate(id)} onEdit={startEdit} />)}
+            {modules.length === 0 && <div className="py-4 text-center text-xs text-[var(--text-muted)]">No modules yet</div>}
+          </>
+        )}
       </div>
     </div>
   );

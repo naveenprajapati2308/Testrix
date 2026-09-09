@@ -19,7 +19,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/queue")
 @RequiredArgsConstructor
-@CrossOrigin
 public class PerfJobQueueController {
 
     private final PerfJobQueueRepository repository;

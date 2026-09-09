@@ -34,7 +34,7 @@ export default function BaseApis() {
   const [addedMessage, setAddedMessage] = useState('');
   const [newRule, setNewRule] = useState({ jsonPath: '', operator: 'EQUALS', expectedValue: '' });
 
-  const { data: apis = [] } = useQuery({
+  const { data: apis = [], isLoading: apisLoading } = useQuery({
     queryKey: ['base-apis'],
     queryFn: async () => (await apiClient.get('/v1/base-apis')).data,
   });
@@ -42,7 +42,7 @@ export default function BaseApis() {
     queryKey: ['collections'],
     queryFn: async () => (await apiClient.get('/v1/collections')).data,
   });
-  const { data: modules = [] } = useQuery({
+  const { data: modules = [], isLoading: modulesLoading } = useQuery({
     queryKey: ['modules'],
     queryFn: async () => (await apiClient.get('/v1/modules')).data,
   });
@@ -176,6 +176,7 @@ export default function BaseApis() {
             apis={apis}
             selectedId={selectedId}
             onSelect={select}
+            loading={apisLoading || modulesLoading}
             emptyMessage="No base APIs yet — create a token/lookup supplier API."
             renderItem={(a) => (
               <>

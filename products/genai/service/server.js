@@ -4,18 +4,16 @@ import { generate } from './app.js';
 import { requireAuth } from './auth.js';
 
 const app=express();
-const PORT=3000;
+const PORT=process.env.PORT || 3000;
 
 // Same origins automation-portal's own SecurityConfig CORS bean already allows — the gateway
 // is what actually fronts this in a real deployment, but direct-port access (dev/testing)
-// still needs a real allow-list instead of reflecting every origin.
-const ALLOWED_ORIGINS = [
-    'http://localhost:15000',
-    'http://localhost:5173',
-    'http://localhost:5170',
-    'http://localhost:15173',
-    'http://localhost:3000'
-];
+// still needs a real allow-list instead of reflecting every origin. CORS_ALLOWED_ORIGINS lets
+// a real production domain be added without a code change (same env var/default as the two
+// Java backends' cors.allowed-origins).
+const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS
+    || 'http://localhost:15000,http://localhost:5173,http://localhost:5170,http://localhost:15173,http://localhost:3000')
+    .split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin || ALLOWED_ORIGINS.includes(origin)) {

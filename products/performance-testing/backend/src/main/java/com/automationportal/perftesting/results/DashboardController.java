@@ -9,7 +9,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/dashboard")
 @RequiredArgsConstructor
-@CrossOrigin
 public class DashboardController {
 
     private final DashboardService service;

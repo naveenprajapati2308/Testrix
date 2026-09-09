@@ -14,12 +14,14 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -113,10 +115,21 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    // Origins list comes from cors.allowed-origins (CORS_ALLOWED_ORIGINS env var) instead of a
+    // hardcoded literal, so a real production domain can be added without a code change. Falls
+    // back to this same dev-origins list whenever the property is blank OR unset — Compose
+    // passes it through as an empty string when .env leaves it blank, and Spring's own
+    // ${X:default} placeholder only covers "unset", not "empty".
+    private static final List<String> DEFAULT_CORS_ORIGINS = List.of(
+            "http://localhost:15000", "http://localhost:5173", "http://localhost:5170",
+            "http://localhost:15173", "http://localhost:3000");
+
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    CorsConfigurationSource corsConfigurationSource(@Value("${cors.allowed-origins:}") String allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:15000", "http://localhost:5173", "http://localhost:5170", "http://localhost:15173", "http://localhost:3000"));
+        configuration.setAllowedOrigins(allowedOrigins == null || allowedOrigins.isBlank()
+                ? DEFAULT_CORS_ORIGINS
+                : Arrays.stream(allowedOrigins.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

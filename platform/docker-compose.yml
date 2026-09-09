@@ -25,8 +25,32 @@ services:
       dockerfile: gateway/Dockerfile
     container_name: testrix-gateway
     restart: unless-stopped
+    # Without this, `docker compose up -d` starts the gateway instantly while the backends
+    # (Spring Boot cold start + Flyway migrations) can take 30-90s to pass their own
+    # healthchecks — nginx serves the login page fine in that window but every /api/ call
+    # 502s until the backends are actually listening. `docker compose up -d --wait` uses
+    # this to hold the CLI until every dependency is truly healthy, not just "started".
+    depends_on:
+      automation-portal-backend:
+        condition: service_healthy
+      api-testing-backend:
+        condition: service_healthy
+      performance-testing-backend:
+        condition: service_healthy
+      genai-service:
+        condition: service_started
     ports:
       - "15000:80"
+    # nginx:alpine ships wget (busybox) but no curl — hitting / is enough to prove nginx itself
+    # is serving, independent of whether any individual backend behind it is up yet. Explicit
+    # 127.0.0.1, not localhost — this image has no IPv6 listener, and busybox wget resolving
+    # "localhost" to ::1 first fails with connection-refused before ever trying IPv4.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     networks:
       - testrix
 

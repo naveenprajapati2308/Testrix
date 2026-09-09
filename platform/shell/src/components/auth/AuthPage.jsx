@@ -9,6 +9,14 @@ import testrixLogo from '../../assets/testrix_logo.png';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// 502/503/504 right after `docker compose up -d` almost always means the backend is still
+// mid-boot (Flyway + Spring context init), not a real outage — retry a few times before
+// showing the user a hard failure.
+const STARTUP_RETRY_STATUSES = new Set([502, 503, 504]);
+const STARTUP_RETRY_ATTEMPTS = 4;
+const STARTUP_RETRY_DELAY_MS = 3000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // ── Auth Page (Login + Forgot Password — no self-registration) ────────────────
 export function AuthPage({ onAuthenticated }) {
   const [mode, setMode] = useState('login');
@@ -70,7 +78,22 @@ export function AuthPage({ onAuthenticated }) {
     setSubmitting(true);
     try {
       if (mode === 'login') {
-        const session = await api.login(form);
+        let session;
+        for (let attempt = 1; attempt <= STARTUP_RETRY_ATTEMPTS; attempt += 1) {
+          try {
+            session = await api.login(form);
+            break;
+          } catch (error) {
+            const isLastAttempt = attempt === STARTUP_RETRY_ATTEMPTS;
+            if (!STARTUP_RETRY_STATUSES.has(error.status) || isLastAttempt) {
+              setMessage('Sign in to the unified testing platform.');
+              throw error;
+            }
+            setMessage(`Server is starting up, retrying… (${attempt}/${STARTUP_RETRY_ATTEMPTS})`);
+            await sleep(STARTUP_RETRY_DELAY_MS);
+          }
+        }
+        setMessage('Sign in to the unified testing platform.');
         if (session.needsProjectSelection) {
           setPendingSession(session);
         } else {

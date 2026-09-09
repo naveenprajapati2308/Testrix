@@ -37,7 +37,7 @@ export default function Scheduler() {
   const [expandedId, setExpandedId] = useState(null); // schedule row drill-down
   const [groupBy, setGroupBy] = useState('module'); // module | cadence
 
-  const { data: schedules = [] } = useQuery({
+  const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
     queryKey: ['schedules'],
     queryFn: async () => (await apiClient.get('/v1/schedules')).data,
     refetchInterval: 10000,
@@ -276,15 +276,19 @@ export default function Scheduler() {
         </div>
 
         {/* Grouped list */}
-        {groups.map(([groupName, items]) => (
-          <ScheduleGroupTable key={groupName} groupName={groupName} items={items}
-            expandedId={expandedId} setExpandedId={setExpandedId} editingId={editingId}
-            startEdit={startEdit} runNowMut={runNowMut} pauseMut={pauseMut} resumeMut={resumeMut}
-            deleteMut={deleteMut} regularApis={regularApis} />
-        ))}
-        {schedules.length === 0 && (
-          <div className="text-center text-[var(--text-muted)] text-sm py-8">No schedules yet</div>
-        )}
+        {schedulesLoading ? (
+          <div className="flex justify-center py-8"><Loader size={24} label="Loading schedules…" /></div>
+        ) : (<>
+          {groups.map(([groupName, items]) => (
+            <ScheduleGroupTable key={groupName} groupName={groupName} items={items}
+              expandedId={expandedId} setExpandedId={setExpandedId} editingId={editingId}
+              startEdit={startEdit} runNowMut={runNowMut} pauseMut={pauseMut} resumeMut={resumeMut}
+              deleteMut={deleteMut} regularApis={regularApis} />
+          ))}
+          {schedules.length === 0 && (
+            <div className="text-center text-[var(--text-muted)] text-sm py-8">No schedules yet</div>
+          )}
+        </>)}
       </>)}
     </div>
   );

@@ -11,7 +11,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/load-tests")
 @RequiredArgsConstructor
-@CrossOrigin
 public class LoadTestController {
 
     private final LoadTestService service;

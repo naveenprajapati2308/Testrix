@@ -9,7 +9,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/drift-alerts")
 @RequiredArgsConstructor
-@CrossOrigin
 public class DriftController {
 
     private final DriftDetector detector;

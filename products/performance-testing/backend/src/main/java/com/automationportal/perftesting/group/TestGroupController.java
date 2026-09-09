@@ -12,7 +12,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/test-groups")
 @RequiredArgsConstructor
-@CrossOrigin
 public class TestGroupController {
 
     private final TestGroupService service;

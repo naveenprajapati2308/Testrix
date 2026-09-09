@@ -8,6 +8,7 @@ import { Button } from '../components/Button.jsx';
 import { ModalOverlay } from '../components/ModalOverlay.jsx';
 import { Pagination } from '../components/Pagination.jsx';
 import { INPUT_CLASS as inputCls } from '../lib/statusColors.js';
+import { Loader } from '../../../../../shared/ui/Loader.jsx';
 
 /** Sniffs whether a collection file is Postman or OpenAPI/Swagger, without asking the user. */
 function detectFormat(text) {
@@ -53,7 +54,7 @@ export default function TesterCollections() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const { data: collections = [] } = useQuery({
+  const { data: collections = [], isLoading: collectionsLoading } = useQuery({
     queryKey: ['collections'],
     queryFn: async () => (await apiClient.get('/v1/collections')).data,
   });
@@ -136,23 +137,29 @@ export default function TesterCollections() {
       </Panel>
 
       <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] divide-y divide-[var(--border-soft)]">
-        {collections.slice((page - 1) * pageSize, page * pageSize).map((c) => (
-          <div key={c.id} onClick={() => navigate(`/tester/${c.id}`)}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--bg-hover)] cursor-pointer group">
-            <FolderOpen size={16} className="text-[var(--accent-text)]" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm text-[var(--text-primary)]">{c.name}</div>
-              {c.description && <div className="text-xs text-[var(--text-muted)] truncate">{c.description}</div>}
-            </div>
-            <span className="text-xs text-[var(--text-muted)]">{c.requestCount} request{c.requestCount === 1 ? '' : 's'}</span>
-            <button onClick={(e) => { e.stopPropagation(); deleteMut.mutate(c.id); }}
-              className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--danger-text)] transition-opacity">
-              <Trash2 size={14} />
-            </button>
-          </div>
-        ))}
-        {collections.length === 0 && (
-          <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No collections yet — create one above or import an existing one.</div>
+        {collectionsLoading ? (
+          <div className="px-4 py-8 flex justify-center"><Loader size={24} label="Loading collections…" /></div>
+        ) : (
+          <>
+            {collections.slice((page - 1) * pageSize, page * pageSize).map((c) => (
+              <div key={c.id} onClick={() => navigate(`/tester/${c.id}`)}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--bg-hover)] cursor-pointer group">
+                <FolderOpen size={16} className="text-[var(--accent-text)]" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-[var(--text-primary)]">{c.name}</div>
+                  {c.description && <div className="text-xs text-[var(--text-muted)] truncate">{c.description}</div>}
+                </div>
+                <span className="text-xs text-[var(--text-muted)]">{c.requestCount} request{c.requestCount === 1 ? '' : 's'}</span>
+                <button onClick={(e) => { e.stopPropagation(); deleteMut.mutate(c.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--danger-text)] transition-opacity">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {collections.length === 0 && (
+              <div className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">No collections yet — create one above or import an existing one.</div>
+            )}
+          </>
         )}
       </div>
       <Pagination page={page} pageSize={pageSize} totalRecords={collections.length}

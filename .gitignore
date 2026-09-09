@@ -32,5 +32,8 @@ loveable.ai/
 # Local DB dumps (contain user data)
 .backups/
 
+# Real signed JWTs used for manual/local testing — never a source file
+.test-token
+
 #restrict documnets to upload in git 
 .docs/

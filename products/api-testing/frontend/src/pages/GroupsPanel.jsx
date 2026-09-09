@@ -49,7 +49,7 @@ export default function GroupsPanel() {
   const [groupsPage, setGroupsPage] = useState(1);
   const [groupsPageSize, setGroupsPageSize] = useState(10);
 
-  const { data: groups = [] } = useQuery({
+  const { data: groups = [], isLoading: groupsLoading } = useQuery({
     queryKey: ['groups'],
     queryFn: async () => (await apiClient.get('/v1/groups')).data,
     refetchInterval: 8000,
@@ -220,7 +220,10 @@ export default function GroupsPanel() {
             </tr>
           </thead>
           <tbody>
-            {pagedGroups.map(({ group: g, memberCount, lastExecution: le }) => (
+            {groupsLoading && (
+              <tr><td colSpan={7} className="px-4 py-8"><div className="flex justify-center"><Loader size={22} /></div></td></tr>
+            )}
+            {!groupsLoading && pagedGroups.map(({ group: g, memberCount, lastExecution: le }) => (
               <Fragment key={g.id}>
               <tr onClick={() => setSelectedId(selectedId === g.id ? null : g.id)}
                 className={`border-b border-[var(--border-soft)] hover:bg-[var(--bg-hover)] cursor-pointer ${selectedId === g.id ? 'bg-[var(--accent-bg-soft)]' : ''}`}>
@@ -272,7 +275,7 @@ export default function GroupsPanel() {
               )}
               </Fragment>
             ))}
-            {groups.length === 0 && (
+            {!groupsLoading && groups.length === 0 && (
               <tr><td colSpan={7} className="px-4 py-6 text-center text-[var(--text-muted)]">No groups yet — create one above, then add Regular APIs to it</td></tr>
             )}
           </tbody>

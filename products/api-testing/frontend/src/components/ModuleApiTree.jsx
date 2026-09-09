@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, ChevronDown, Folder } from 'lucide-react';
+import { Loader } from '../../../../../shared/ui/Loader.jsx';
 
 /**
  * Groups a flat list of Base/Regular APIs by their module (nested, since
@@ -9,7 +10,7 @@ import { ChevronRight, ChevronDown, Folder } from 'lucide-react';
  * containing the currently selected API auto-expands (and its ancestors,
  * for nested modules) so selection stays visible.
  */
-export default function ModuleApiTree({ modules, apis, selectedId, onSelect, renderItem, emptyMessage }) {
+export default function ModuleApiTree({ modules, apis, selectedId, onSelect, renderItem, emptyMessage, loading }) {
   const [expanded, setExpanded] = useState(() => new Set());
 
   const moduleById = new Map();
@@ -94,6 +95,10 @@ export default function ModuleApiTree({ modules, apis, selectedId, onSelect, ren
 
   const rootModules = childModules.get('root') ?? [];
   const unassigned = apisByModule.get('none') ?? [];
+
+  if (loading) {
+    return <div className="p-4 flex justify-center"><Loader size={22} /></div>;
+  }
 
   if (rootModules.length === 0 && unassigned.length === 0) {
     return <div className="p-3 text-xs text-[var(--text-muted)]">{emptyMessage}</div>;

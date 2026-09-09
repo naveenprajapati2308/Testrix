@@ -13,6 +13,7 @@ import { Panel, DataTable, Modal, ConfirmDialog } from '../shared/index.jsx';
 export function ProjectUserManagement({ setNotice }) {
   const project = auth.get()?.project;
   const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [roleOptions, setRoleOptions] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -29,7 +30,10 @@ export function ProjectUserManagement({ setNotice }) {
 
   const currentUsername = auth.get()?.user?.username;
 
-  const load = () => api.listProjectUsers(project.id).then(setMembers).catch((e) => setNotice(e.message));
+  const load = () => {
+    setLoading(true);
+    return api.listProjectUsers(project.id).then(setMembers).catch((e) => setNotice(e.message)).finally(() => setLoading(false));
+  };
   useEffect(() => {
     load();
     api.projectRoles().then(setRoleOptions).catch(() => {});
@@ -105,7 +109,7 @@ export function ProjectUserManagement({ setNotice }) {
           </button>
           <span className="um-count">{members.length} member{members.length !== 1 ? 's' : ''}</span>
         </div>
-        <DataTable columns={columns} data={members} searchPlaceholder="Filter team members..." exportFilename="project_team.csv" />
+        <DataTable columns={columns} data={members} loading={loading} searchPlaceholder="Filter team members..." exportFilename="project_team.csv" />
       </Panel>
 
       {showCreate && (

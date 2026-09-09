@@ -2,24 +2,39 @@
 # instance against the same MySQL/Redis to prove SKIP LOCKED claiming never
 # double-runs a schedule.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml up -d api-testing-backend-2
+# Must be run from the repo root together with the root docker-compose.yml (which `include:`s
+# this product's own compose file) — this overlay only adds one extra service on top of the
+# already-running stack, it doesn't stand alone:
+#   docker compose -f docker-compose.yml -f products/api-testing/docker-compose.loadtest.yml up -d api-testing-backend-2
 #   ...run the test...
-#   docker compose -f docker-compose.yml -f docker-compose.loadtest.yml stop api-testing-backend-2
+#   docker compose -f docker-compose.yml -f products/api-testing/docker-compose.loadtest.yml stop api-testing-backend-2
 services:
   api-testing-backend-2:
-    image: api-testing-platform-api-testing-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: api-testing-backend-2
     restart: unless-stopped
     depends_on:
-      api-testing-mysql:
+      testrix-mysql:
         condition: service_healthy
       api-testing-redis:
         condition: service_healthy
     environment:
-      DB_URL: jdbc:mysql://api-testing-mysql:3306/api_testing_platform?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      TZ: ${SCHEDULER_TZ:-Asia/Kolkata}
+      DB_URL: jdbc:mysql://testrix-mysql:3306/testrix_platform?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       DB_USERNAME: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
       REDIS_HOST: api-testing-redis
+      FRONTEND_URL: http://localhost:15000
       HISTORY_BODY_STORE_DIR: /app/history-bodies
+      FORM_DATA_FILE_STORE_DIR: /app/form-data-files
+      APITESTING_ENCRYPTION_KEY: ${APITESTING_ENCRYPTION_KEY:?APITESTING_ENCRYPTION_KEY must be set in .env}
+      PORTAL_JWT_SECRET: ${PORTAL_JWT_SECRET:?PORTAL_JWT_SECRET must be set in .env}
+      INTERNAL_MAIL_URL: http://automation-portal-backend:8080/api/internal/reports/mail
+      PORTAL_EVENTS_API_KEY: ${PORTAL_EVENTS_API_KEY:?PORTAL_EVENTS_API_KEY must be set in .env}
+    volumes:
+      - api_testing_history_bodies:/app/history-bodies
+      - api_testing_form_data_files:/app/form-data-files
     networks:
-      - api_testing_platform_network
+      - testrix

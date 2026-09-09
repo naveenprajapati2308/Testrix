@@ -11,7 +11,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/virtual-users")
 @RequiredArgsConstructor
-@CrossOrigin
 public class VirtualUserController {
 
     private final VirtualUserService service;
