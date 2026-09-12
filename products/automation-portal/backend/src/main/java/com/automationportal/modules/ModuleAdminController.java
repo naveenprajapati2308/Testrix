@@ -1,7 +1,7 @@
 package com.automationportal.modules;
 
 import com.automationportal.common.ApiResponse;
-import com.automationportal.workspace.CurrentProjectService;
+import com.automationportal.security.CurrentProjectService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;

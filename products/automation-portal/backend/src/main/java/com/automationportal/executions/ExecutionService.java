@@ -1,6 +1,6 @@
 package com.automationportal.executions;
 
-import com.automationportal.auth.AuthenticatedUserService;
+import com.automationportal.security.CurrentUserService;
 import com.automationportal.config.PortalAutomationProperties;
 import com.automationportal.events.LiveBroadcastService;
 import com.automationportal.events.ExecutionEventPayload;
@@ -11,10 +11,9 @@ import com.automationportal.moduleenvironments.ModuleEnvironmentRepository;
 import com.automationportal.moduleenvironments.ModuleEnvironmentResolver;
 import com.automationportal.modules.ModuleEntity;
 import com.automationportal.modules.ModuleRepository;
-import com.automationportal.users.UserRole;
-import com.automationportal.workspace.CurrentProjectService;
-import com.automationportal.workspace.ProjectContext;
-import com.automationportal.workspace.ProjectContextHolder;
+import com.automationportal.security.CurrentProjectService;
+import com.automationportal.security.ProjectContext;
+import com.automationportal.security.ProjectContextHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
@@ -40,11 +39,9 @@ import java.util.stream.Collectors;
 public class ExecutionService {
     private static final Logger log = LoggerFactory.getLogger(ExecutionService.class);
 
-    // Generous on purpose: a large suite's testng-results.xml merge alone can take 8+ seconds,
-    // and the whole run (Selenium against a real site) can legitimately run long. This only
-    // needs to catch executions that are ACTUALLY stuck (runner died before any SUITE_COMPLETED
-    // ever arrived) — see reapStaleRunningExecutions() below for why it's time-based, not
-    // triggered by the runner's process-exit signal.
+    // Generous on purpose: a real Selenium run can legitimately take this long. It only needs to
+    // catch runs that are actually stuck — see reapStaleRunningExecutions() for why it is
+    // time-based rather than driven by the runner's process-exit signal.
     private static final java.time.Duration STALE_RUNNING_GRACE_PERIOD = java.time.Duration.ofMinutes(20);
 
     private final ExecutionRepository repository;
@@ -57,7 +54,7 @@ public class ExecutionService {
     private final ModuleRepository moduleRepository;
     private final ModuleEnvironmentRepository moduleEnvironmentRepository;
     private final FrameworkRegistry frameworkRegistry;
-    private final AuthenticatedUserService authenticatedUserService;
+    private final CurrentUserService currentUserService;
     private final ExecutionIdGeneratorService executionIdGeneratorService;
     private final CurrentProjectService currentProjectService;
 
@@ -71,7 +68,7 @@ public class ExecutionService {
                             ModuleRepository moduleRepository,
                             ModuleEnvironmentRepository moduleEnvironmentRepository,
                             FrameworkRegistry frameworkRegistry,
-                            AuthenticatedUserService authenticatedUserService,
+                            CurrentUserService currentUserService,
                             ExecutionIdGeneratorService executionIdGeneratorService,
                             CurrentProjectService currentProjectService) {
         this.repository = repository;
@@ -84,7 +81,7 @@ public class ExecutionService {
         this.moduleRepository = moduleRepository;
         this.moduleEnvironmentRepository = moduleEnvironmentRepository;
         this.frameworkRegistry = frameworkRegistry;
-        this.authenticatedUserService = authenticatedUserService;
+        this.currentUserService = currentUserService;
         this.executionIdGeneratorService = executionIdGeneratorService;
         this.currentProjectService = currentProjectService;
     }
@@ -96,24 +93,18 @@ public class ExecutionService {
         return queueForProject(request, triggeredByUserId, currentProjectService.requireProjectId());
     }
 
-    // Shared by queue() (real caller identity) and rerun()/rerunFailed() (which must stamp the
-    // ORIGINAL execution's project, not the caller's — a Super Admin can rerun any execution
-    // per requireExecutionAccess()'s null-safe bypass, but has no project context of their own
-    // to stamp the new row with).
+    // Shared by queue() and rerun(): a rerun must stamp the ORIGINAL execution's project, since
+    // a Super Admin may rerun anything but has no project context of their own.
     private Execution queueForProject(RunExecutionRequest request, Long triggeredByUserId, Long projectId) {
         String framework = request.framework() != null && !request.framework().isBlank() ? request.framework() : "MAVEN_TESTNG";
 
         if (request.executionType() == ExecutionType.MODULE) {
             validateModuleEnvironmentBrowser(request.moduleCode(), framework, request.environmentId(), request.requestedBrowser(), projectId);
         } else if (request.executionType() == ExecutionType.XML_SUITE) {
-            // The "run a raw suite/spec path directly" escape hatch bypasses Module-level
-            // validation entirely, so without this a project with NO framework wired up could
-            // still submit an arbitrary path (e.g. another project's real suite file) straight
-            // to /api/executions/run and have it actually execute — the same shared-checkout
-            // cross-tenant leak the suites-listing gate in ExecutionController closes for
-            // discovery, closed here for submission. A project only "owns" a raw path once an
-            // admin has deliberately wired at least one Module in for that framework (today's
-            // documented interim onboarding step — see docs/automation-framework-connection.md).
+            // Raw-path submission bypasses Module validation, so without this a project with no
+            // framework wired up could execute another project's suite file — the same
+            // cross-tenant leak the suites-listing gate closes for discovery, closed for
+            // submission. Owning a raw path requires at least one Module for that framework.
             if (moduleRepository.findByProjectIdAndRunnerType(projectId, framework).isEmpty()) {
                 throw new IllegalArgumentException(
                         "No framework is connected for this project yet — an admin needs to register a Test Engine/Module before suites can be run.");
@@ -144,12 +135,9 @@ public class ExecutionService {
                 .orElse("GEN");
     }
 
-    /**
-     * Server-side enforcement of the Framework -> Module -> Environment -> Browser
-     * relationship — the frontend already hides invalid combinations, but nothing previously
-     * stopped a raw API call from bypassing that. Also enforces the module's optional
-     * allowedRoles execution-permission list.
-     */
+    /** Server-side enforcement of Framework -> Module -> Environment -> Browser: the frontend
+     *  hides invalid combinations, but nothing stopped a raw API call from bypassing that. Also
+     *  enforces the module's optional allowedRoles list. */
     private void validateModuleEnvironmentBrowser(String moduleCode, String framework, Long environmentId, String requestedBrowser, Long projectId) {
         if (moduleCode == null || moduleCode.isBlank()) {
             return;
@@ -178,21 +166,17 @@ public class ExecutionService {
         if (module.getAllowedRoles() != null && !module.getAllowedRoles().isBlank()) {
             List<String> allowedRoles = Arrays.stream(module.getAllowedRoles().split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList();
-            // Every project-scoped user created since the multi-workspace rollout gets the
-            // platform-level UserRole hardcoded to VIEWER — their real authority lives in their
-            // project role(s) (project_users + Role catalog) instead. If we OR'd the platform
-            // role in alongside a present project context, "VIEWER" in allowedRoles would match
-            // every such user regardless of their actual project role, defeating the ACL. So the
-            // platform role is only consulted for legacy accounts with no project context at all;
-            // once a project context exists, project roles are the sole source of truth.
+            // Project-scoped users all carry platform role VIEWER; their real authority is the
+            // project role. OR-ing the platform role in would make "VIEWER" match everyone and
+            // defeat the ACL, so it is consulted only for legacy accounts with no project.
             ProjectContext context = ProjectContextHolder.get();
             boolean roleMatches;
             if (context != null) {
                 roleMatches = context.projectRoles() != null
                         && context.projectRoles().stream().anyMatch(allowedRoles::contains);
             } else {
-                UserRole currentRole = authenticatedUserService.currentUser().getRole();
-                roleMatches = currentRole != null && allowedRoles.contains(currentRole.name());
+                String currentRole = currentUserService.currentUser().role();
+                roleMatches = currentRole != null && allowedRoles.contains(currentRole);
             }
             if (!roleMatches) {
                 throw new IllegalArgumentException("You do not have permission to execute this module.");
@@ -200,11 +184,8 @@ public class ExecutionService {
         }
     }
 
-    /**
-     * Permanently removes an execution and every trace of it: test cases (+steps,
-     * +tag links), artifact rows, logs, the EM job/queue rows, the execution row
-     * itself, and the copied artifact files on disk.
-     */
+    /** Permanently removes an execution and every trace of it: test cases, artifacts, logs, the
+     *  EM job/queue rows, the execution row, and the copied artifact files on disk. */
     @Transactional
     public void delete(Long id) {
         Execution e = requireExecutionAccess(id);
@@ -381,15 +362,9 @@ public class ExecutionService {
         broadcastService.broadcast(e.getExecutionCode(), payload);
     }
 
-    /**
-     * Called when the Framework Runner's process has exited, regardless of whether it ever ran
-     * a single test. In the normal case MPHIDB's listener already pushed SUITE_COMPLETED and
-     * ExecutionEventService.finalizeExecution() already set a real terminal status (PASSED/
-     * FAILED/PARTIAL), so this is a no-op. But if the run failed before TestNG ever started
-     * (e.g. "mvn clean" itself failing on a permission error) no listener code runs at all, and
-     * without this the execution — and ExecutionWorker.pollQueue()'s "at most one RUNNING at a
-     * time" gate with it — would stay stuck on RUNNING forever.
-     */
+    /** Called when the runner process exits. Normally a no-op, since the listener already pushed
+     *  SUITE_COMPLETED. But if the run died before TestNG started no listener code runs at all,
+     *  and the execution — plus pollQueue()'s one-RUNNING-at-a-time gate — would stick forever. */
     public void markStaleIfStillRunning(Long id) {
         Execution e = repository.findById(id).orElseThrow();
         if (e.getStatus() != ExecutionStatus.RUNNING) {
@@ -416,15 +391,10 @@ public class ExecutionService {
         broadcastService.broadcast(e.getExecutionCode(), payload);
     }
 
-    // Sole path that force-terminates a stuck RUNNING execution. The Execution Manager used to
-    // trigger this immediately whenever the framework runner's OS process exited — but that
-    // signal fires independently of (and often before) the backend finishing its own event
-    // processing for the same execution, so it raced legitimate slow-but-successful completions
-    // and clobbered correct results with a bogus ERROR. Being purely time-based instead removes
-    // the race entirely: a run that's still genuinely in progress is simply younger than the
-    // grace period and left alone; only a run that's been stuck for a long time (runner died
-    // before any SUITE_COMPLETED ever arrived — the original 2026-07-04 bug this replaces) gets
-    // reaped.
+    // Sole path that force-terminates a stuck RUNNING execution. Triggering this on the runner's
+    // process-exit signal raced slow-but-successful completions and clobbered real results with a
+    // bogus ERROR. Time-based removes the race: in-progress runs are simply younger than the
+    // grace period, so only genuinely stuck ones are reaped.
     @Scheduled(fixedDelay = 60000)
     public void reapStaleRunningExecutions() {
         Instant cutoff = Instant.now().minus(STALE_RUNNING_GRACE_PERIOD);

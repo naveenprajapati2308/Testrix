@@ -19,32 +19,78 @@ services:
     networks:
       - testrix
 
+  testrix-platform-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: testrix-platform-backend
+    restart: unless-stopped
+    depends_on:
+      testrix-mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    environment:
+      DB_URL: jdbc:mysql://testrix-mysql:3306/testrix_platform?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      PORTAL_UPLOADS_ROOT: /app/artifacts
+      PORTAL_FRONTEND_URL: http://localhost:15000
+      PORTAL_MAIL_CONSOLE_ONLY: ${PORTAL_MAIL_CONSOLE_ONLY:-false}
+      PORTAL_MAIL_FROM_NAME: ${PORTAL_MAIL_FROM_NAME:-Testrix}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      PORTAL_JWT_SECRET: ${PORTAL_JWT_SECRET:?PORTAL_JWT_SECRET must be set in .env}
+      PORTAL_JWT_EXPIRATION_MINUTES: 30
+      PORTAL_JWT_REFRESH_EXPIRATION_DAYS: 14
+      PORTAL_SUPERADMIN_SEED_PASSWORD: ${PORTAL_SUPERADMIN_SEED_PASSWORD:?PORTAL_SUPERADMIN_SEED_PASSWORD must be set in .env}
+      PORTAL_SUPERADMIN_EMAIL: ${PORTAL_SUPERADMIN_EMAIL:?PORTAL_SUPERADMIN_EMAIL must be set in .env}
+      PORTAL_EVENTS_API_KEY: ${PORTAL_EVENTS_API_KEY:?PORTAL_EVENTS_API_KEY must be set in .env}
+      AUTH_RATE_LIMIT_ENABLED: ${AUTH_RATE_LIMIT_ENABLED:-true}
+      AUTH_RATE_LIMIT_ACCOUNT_ATTEMPTS: ${AUTH_RATE_LIMIT_ACCOUNT_ATTEMPTS:-20}
+      AUTH_RATE_LIMIT_ACCOUNT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_ACCOUNT_WINDOW_SECONDS:-3600}
+      AUTH_RATE_LIMIT_ACCOUNT_LOCKOUT_SECONDS: ${AUTH_RATE_LIMIT_ACCOUNT_LOCKOUT_SECONDS:-3600}
+      AUTH_RATE_LIMIT_IP_ATTEMPTS: ${AUTH_RATE_LIMIT_IP_ATTEMPTS:-40}
+      AUTH_RATE_LIMIT_IP_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_IP_WINDOW_SECONDS:-3600}
+      AUTH_RATE_LIMIT_IP_LOCKOUT_SECONDS: ${AUTH_RATE_LIMIT_IP_LOCKOUT_SECONDS:-86400}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+    ports:
+      - "18081:8080"
+    volumes:
+      - testrix_platform_artifacts:/app/artifacts
+    networks:
+      - testrix
+
   testrix-gateway:
     build:
       context: ..
       dockerfile: gateway/Dockerfile
     container_name: testrix-gateway
     restart: unless-stopped
-    # Without this, `docker compose up -d` starts the gateway instantly while the backends
-    # (Spring Boot cold start + Flyway migrations) can take 30-90s to pass their own
-    # healthchecks — nginx serves the login page fine in that window but every /api/ call
-    # 502s until the backends are actually listening. `docker compose up -d --wait` uses
-    # this to hold the CLI until every dependency is truly healthy, not just "started".
+    # Only the platform service is health-gated: without it there is no login. Products are
+    # deliberately not, so a broken product cannot stop the gateway — and therefore login and
+    # every other product — from coming up. nginx 502s just that product's routes instead.
     depends_on:
+      testrix-platform-backend:
+        condition: service_healthy
       automation-portal-backend:
-        condition: service_healthy
+        condition: service_started
       api-testing-backend:
-        condition: service_healthy
+        condition: service_started
       performance-testing-backend:
-        condition: service_healthy
+        condition: service_started
       genai-service:
         condition: service_started
     ports:
       - "15000:80"
-    # nginx:alpine ships wget (busybox) but no curl — hitting / is enough to prove nginx itself
-    # is serving, independent of whether any individual backend behind it is up yet. Explicit
-    # 127.0.0.1, not localhost — this image has no IPv6 listener, and busybox wget resolving
-    # "localhost" to ::1 first fails with connection-refused before ever trying IPv4.
+    # busybox wget, not curl (not in nginx:alpine). Explicit 127.0.0.1 because this image has no
+    # IPv6 listener and "localhost" resolves to ::1 first, failing before it ever tries IPv4.
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
       interval: 15s
@@ -61,3 +107,5 @@ networks:
 volumes:
   testrix_mysql_data:
     name: testrix_mysql_data
+  testrix_platform_artifacts:
+    name: testrix_platform_artifacts

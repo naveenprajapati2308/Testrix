@@ -1,6 +1,6 @@
-// Behind the Testrix gateway this app is served at /automation/, so every
-// backend call must carry that prefix; in dev (vite proxy) BASE_URL is '/'.
-export const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+import { API_BASE, PLATFORM_BASE } from './config.js';
+
+export { API_BASE };
 
 const authStore = {
   get: () => JSON.parse(localStorage.getItem('automationPortalAuth') || 'null'),
@@ -91,17 +91,14 @@ const unwrap = async (response, path = response.url || '') => {
   return body.data;
 };
 
-// Refresh tokens rotate server-side (RefreshTokenService.rotate revokes the old one on every
-// use). If several requests 401 around the same time — e.g. Dashboard's Promise.all of several
-// calls — each independently retrying '/api/auth/refresh' with the same (soon-to-be-revoked)
-// refresh token means only the first actually succeeds; the rest see it as already-revoked and
-// were incorrectly clearing the session and showing "Session Expired" even though the session
-// was fine. Sharing one in-flight refresh across all concurrent callers fixes that.
+// Refresh tokens rotate server-side, so concurrent 401s each retrying with the same token means
+// only the first succeeds — the rest saw "already revoked" and wrongly cleared a healthy session.
+// One shared in-flight refresh fixes that.
 let inFlightRefresh = null;
 
 const refreshSession = (refreshToken) => {
   if (!inFlightRefresh) {
-    inFlightRefresh = fetch(`${API_BASE}/api/auth/refresh`, {
+    inFlightRefresh = fetch(`${PLATFORM_BASE}/api/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken })
@@ -113,6 +110,7 @@ const refreshSession = (refreshToken) => {
 };
 
 const request = async (path, options = {}, retryCount = 0) => {
+  const base = options.base ?? API_BASE;
   const session = authStore.get();
   const headers = {
     ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
@@ -121,7 +119,7 @@ const request = async (path, options = {}, retryCount = 0) => {
   };
   let response;
   try {
-    response = await fetch(API_BASE + path, { ...options, headers });
+    response = await fetch(base + path, { ...options, headers });
   } catch (error) {
     const msg = 'Unable to connect to the server. Please check that the backend is running and try again.';
     const detail = `Request Endpoint: ${path}\nHTTP Method: ${options.method || 'GET'}\nError Type: ${error.name || 'NetworkError'}\nSystem Message: ${error.message}\n\nTroubleshooting:\n- Verify that the backend docker containers are running.\n- Check if there is an active internet connection.\n- Ensure the port 8080 is accessible.`;
@@ -149,13 +147,9 @@ const request = async (path, options = {}, retryCount = 0) => {
       // handled the expiry — resolving silently avoids stacking popups.
     }
   } else if (response.status === 401 && session?.accessToken) {
-    // A 401 is only a real expiry if the token this request carried is still the
-    // active one. A request from a previous session epoch can resolve *after* the
-    // user has already signed back in — killing the brand-new session with a
-    // "Session Expired" popup. Retry those against the current session instead.
-    // (Unauthenticated calls — login, forgot-password — never had a session to
-    // begin with, so a 401 there is a real credentials error, not an expiry;
-    // `session?.accessToken` above routes those to the normal error path below.)
+    // A 401 is a real expiry only if this request's token is still the active one — a stale
+    // request resolving after the user signed back in would otherwise kill the new session.
+    // Unauthenticated calls never had a session, so their 401 is a credentials error instead.
     const current = authStore.get();
     if (current?.accessToken && current.accessToken !== session?.accessToken && retryCount < 2) {
       return request(path, options, retryCount + 1);
@@ -167,11 +161,9 @@ const request = async (path, options = {}, retryCount = 0) => {
 
 export const auth = authStore;
 
-// The access token already carries the caller's projectRoles claim (JwtService.createProjectAccessToken)
-// — decoding it client-side avoids a round trip just to answer "is this user a Project Admin?"
-// (used to gate the Automation Setup Wizard). JWTs are signed, not encrypted, so reading a claim
-// out of a token this app already holds carries no new trust — never anything this app couldn't
-// already infer from what the backend accepted.
+// The token already carries projectRoles, so decoding it locally avoids a round trip just to
+// answer "is this user a Project Admin?". JWTs are signed, not encrypted — reading a claim out of
+// a token this app already holds grants it nothing the backend hasn't already accepted.
 export const decodeProjectRoles = (token) => {
   if (!token) return [];
   try {
@@ -183,36 +175,8 @@ export const decodeProjectRoles = (token) => {
 };
 
 export const api = {
-  // ── Auth ─────────────────────────────────────────────────────────────────
-  login: (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
-  logout: (refreshToken) => request('/api/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken }) }),
-  me: () => request('/api/auth/me'),
-  forgotPassword: (payload) => request('/api/auth/forgot-password', { method: 'POST', body: JSON.stringify(payload) }),
-  resetPassword: (payload) => request('/api/auth/reset-password', { method: 'POST', body: JSON.stringify(payload) }),
-  changePassword: (payload) => request('/api/auth/change-password', { method: 'POST', body: JSON.stringify(payload) }),
-
-  // ── Profile ───────────────────────────────────────────────────────────────
-  profile: () => request('/api/profile'),
-  updateProfile: (payload) => request('/api/profile', { method: 'PUT', body: JSON.stringify(payload) }),
-  uploadProfileImage: (file) => {
-    const form = new FormData();
-    form.append('file', file);
-    return request('/api/profile/image', { method: 'POST', body: form });
-  },
-  auditLogs: () => request('/api/profile/audit-logs'),
-  requestEmailChange: (payload) => request('/api/profile/email-change/request', { method: 'POST', body: JSON.stringify(payload) }),
-  verifyEmailChange: (payload) => request('/api/profile/email-change/verify', { method: 'POST', body: JSON.stringify(payload) }),
-
-  // ── Admin: User Management (SUPER_ADMIN only) ─────────────────────────────
-  adminListUsers: () => request('/api/admin/users'),
-  adminGetUser: (id) => request(`/api/admin/users/${id}`),
-  adminCreateUser: (payload) => request('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
-  adminUpdateUser: (id, payload) => request(`/api/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  adminDisableUser: (id) => request(`/api/admin/users/${id}/disable`, { method: 'PUT', body: JSON.stringify({}) }),
-  adminEnableUser: (id) => request(`/api/admin/users/${id}/enable`, { method: 'PUT', body: JSON.stringify({}) }),
-  adminResetPassword: (id, payload) => request(`/api/admin/users/${id}/reset-password`, { method: 'PUT', body: JSON.stringify(payload) }),
-  adminAssignRole: (id, role) => request(`/api/admin/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
-  adminDeleteUser: (id) => request(`/api/admin/users/${id}`, { method: 'DELETE' }),
+  // ── Auth (owned by the platform service, not this product) ────────────────
+  logout: (refreshToken) => request('/api/auth/logout', { method: 'POST', base: PLATFORM_BASE, body: JSON.stringify({ refreshToken }) }),
 
   // ── Portal ────────────────────────────────────────────────────────────────
   dashboardSummary: (range) => request(`/api/dashboard/summary?range=${range || '7d'}`),

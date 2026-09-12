@@ -45,6 +45,7 @@ public class ExecutionEngineService {
     private static final long MIN_TIMEOUT_MS = 100;
 
     private final FormDataFileStore formDataFileStore;
+    private final ExecutionEngineProperties properties;
 
     /** How many times a single connect-level failure gets retried before giving up. */
     private static final int MAX_CONNECT_RETRIES = 3;
@@ -75,12 +76,39 @@ public class ExecutionEngineService {
         for (int attempt = 1; attempt <= MAX_CONNECT_RETRIES; attempt++) {
             response = attemptOnce(request);
             if (response.isSuccess() || !isTransientConnectFailure(response)) {
-                return response;
+                break;
             }
             log.warn("Transient connect failure on attempt {}/{} for {} {}: {} — retrying",
                     attempt, MAX_CONNECT_RETRIES, request.getMethod(), request.getUrl(), response.getErrorMessage());
         }
-        return response;
+        return curlRescueIfNeeded(request, response);
+    }
+
+    /**
+     * Last resort for a target that WebClient specifically cannot satisfy. Every
+     * project points API Testing at a different server, and some of them decide what
+     * to serve based on the client's fingerprint rather than the request — that is
+     * exactly how godavari.mp.gov.in behaved (429 for WebClient, 200 for curl from
+     * the same container, same moment). Rather than require someone to notice that
+     * and hand-maintain a host list, a request that fails in one of those two
+     * fingerprint-shaped ways is retried once through curl, and the host is logged so
+     * it can be added to {@code curl-hosts} and skip the wasted first attempt later.
+     */
+    private ExecutionResponse curlRescueIfNeeded(ExecutionRequest request, ExecutionResponse response) {
+        if (response == null || requiresCurl(request)) return response;
+        boolean fingerprintShaped = isTransientConnectFailure(response)
+                || (response.isSuccess() && response.getStatusCode() != null && response.getStatusCode() == 429);
+        if (!fingerprintShaped) return response;
+
+        log.warn("{} {} failed via WebClient ({}) — retrying once via curl. Add '{}' to "
+                        + "apitesting.execution.curl-hosts to skip this first attempt in future.",
+                request.getMethod(), request.getUrl(),
+                response.getStatusCode() != null ? "HTTP " + response.getStatusCode() : response.getErrorMessage(),
+                hostOf(request.getUrl()));
+        ExecutionResponse viaCurl = attemptOnceViaCurl(request);
+        boolean better = viaCurl.isSuccess()
+                && (viaCurl.getStatusCode() == null || viaCurl.getStatusCode() != 429);
+        return better ? viaCurl : response;
     }
 
     private boolean isTransientConnectFailure(ExecutionResponse response) {
@@ -89,22 +117,42 @@ public class ExecutionEngineService {
     }
 
     private ExecutionResponse attemptOnce(ExecutionRequest request) {
-        // Every request goes through the system curl binary, not our own
-        // WebClient/Netty stack. Confirmed live 2026-08-21 against
-        // godavari.mp.gov.in: WebClient's plain JSON POST calls (Base API
-        // logins — no file, no manual multipart body) got rate-limited (429)
-        // from the exact same container, at the exact same moment a plain
-        // curl call to the identical URL succeeded — i.e. the remote side is
-        // bucketing by client fingerprint (User-Agent/TLS), not just source
-        // IP, and only the curl-shaped bucket was clear. The earlier,
-        // narrower finding (multipart+file hangs on WebClient until our own
-        // timeout, reported misleadingly as "finishConnect(..) failed:
-        // Connection refused") already forced curl for that case; this
-        // widens it to every request, since curl has been the only
-        // consistently reliable client against this host all session.
-        // attemptOnceViaWebClient() is kept for now as an documented,
-        // available fallback, not because anything currently calls it.
-        return attemptOnceViaCurl(request);
+        return requiresCurl(request) ? attemptOnceViaCurl(request) : attemptOnceViaWebClient(request);
+    }
+
+    /**
+     * curl is the exception, not the default. Two cases genuinely need it, both
+     * found live on 2026-08-21:
+     * <ul>
+     *   <li>Hosts that rate-limit (429) by client fingerprint — godavari.mp.gov.in
+     *       let curl through while rejecting WebClient from the same container at
+     *       the same moment. Listed in {@code apitesting.execution.curl-hosts}.</li>
+     *   <li>Requests carrying an actual file upload, which hung on WebClient's
+     *       multipart writer until the request timed out.</li>
+     * </ul>
+     * Everything else uses WebClient, because a process per request cannot scale to
+     * scheduler-level concurrency, and the curl path also cannot report response
+     * headers or TTFB (it only captures http_code and content_type via {@code -w}).
+     */
+    private boolean requiresCurl(ExecutionRequest request) {
+        if (hasFileField(request)) return true;
+        List<String> curlHosts = properties.getCurlHosts();
+        if (curlHosts.contains("*")) return true;
+        String host = hostOf(request.getUrl());
+        if (host == null) return false;
+        return curlHosts.stream()
+                .map(h -> h.trim().toLowerCase())
+                .filter(h -> !h.isEmpty())
+                .anyMatch(h -> host.equals(h) || host.endsWith("." + h));
+    }
+
+    private String hostOf(String url) {
+        try {
+            String host = java.net.URI.create(url.trim()).getHost();
+            return host == null ? null : host.toLowerCase();
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private boolean hasFileField(ExecutionRequest request) {
@@ -180,6 +228,32 @@ public class ExecutionEngineService {
 
     private static final String CURL_META_MARKER = "__TESTRIX_CURL_META__";
 
+    /**
+     * Parses curl's {@code -D} header dump. With {@code -L} the file holds one
+     * block per hop, so only the last block (the final response) is kept —
+     * matching what the WebClient path reports.
+     */
+    private Map<String, List<String>> parseHeaderDump(java.nio.file.Path dump) {
+        Map<String, List<String>> headers = new LinkedHashMap<>();
+        try {
+            for (String line : java.nio.file.Files.readAllLines(dump, StandardCharsets.UTF_8)) {
+                String trimmed = line.strip();
+                if (trimmed.isEmpty()) continue;
+                if (trimmed.regionMatches(true, 0, "HTTP/", 0, 5)) {
+                    headers.clear(); // a new status line means a new hop — discard the previous one
+                    continue;
+                }
+                int colon = trimmed.indexOf(':');
+                if (colon <= 0) continue;
+                headers.computeIfAbsent(trimmed.substring(0, colon).strip(), k -> new java.util.ArrayList<>())
+                        .add(trimmed.substring(colon + 1).strip());
+            }
+        } catch (Exception ex) {
+            log.warn("Could not read curl header dump: {}", ex.getMessage());
+        }
+        return headers;
+    }
+
     private ExecutionResponse attemptOnceViaCurl(ExecutionRequest request) {
         long start = System.currentTimeMillis();
         List<java.nio.file.Path> tempFiles = new java.util.ArrayList<>();
@@ -195,6 +269,15 @@ public class ExecutionEngineService {
             argv.add(String.valueOf(timeoutSeconds));
             if (!request.isVerifySsl()) argv.add("-k");
             if (request.isFollowRedirects()) argv.add("-L");
+
+            // Response headers go to their own file rather than into stdout (-i),
+            // which would otherwise have to be separated from the body by hand and
+            // would corrupt binary responses. Without this the curl path reports no
+            // response headers at all, unlike the WebClient path.
+            java.nio.file.Path headerDump = java.nio.file.Files.createTempFile("testrix-curl-hdr-", ".txt");
+            tempFiles.add(headerDump);
+            argv.add("-D");
+            argv.add(headerDump.toString());
 
             HttpHeaders scratch = new HttpHeaders();
             applyHeaders(scratch, request);
@@ -234,7 +317,9 @@ public class ExecutionEngineService {
             }
 
             argv.add("-w");
-            argv.add("\n" + CURL_META_MARKER + "%{http_code}|%{content_type}\n");
+            // time_starttransfer is curl's time-to-first-byte, in fractional seconds —
+            // without it the curl path reports no TTFB at all, unlike WebClient.
+            argv.add("\n" + CURL_META_MARKER + "%{http_code}|%{content_type}|%{time_starttransfer}\n");
             argv.add(buildUrl(request));
 
             ProcessBuilder pb = new ProcessBuilder(argv);
@@ -262,15 +347,24 @@ public class ExecutionEngineService {
             String[] parts = meta.split("\\|", -1);
             int statusCode = parts.length > 0 && !parts[0].isBlank() ? Integer.parseInt(parts[0]) : 0;
             String contentType = parts.length > 1 ? parts[1] : null;
+            Long ttfbMs = null;
+            if (parts.length > 2 && !parts[2].isBlank()) {
+                try {
+                    ttfbMs = Math.round(Double.parseDouble(parts[2].trim()) * 1000);
+                } catch (NumberFormatException ignored) {
+                    // curl builds that don't support the variable emit it literally; no TTFB then.
+                }
+            }
 
             return ExecutionResponse.builder()
                     .success(true)
                     .statusCode(statusCode)
                     .statusText(statusText(statusCode))
-                    .headers(new LinkedHashMap<>())
+                    .headers(parseHeaderDump(headerDump))
                     .contentType(contentType != null && !contentType.isBlank() ? contentType : null)
                     .body(body)
                     .durationMs(duration)
+                    .ttfbMs(ttfbMs)
                     .sizeBytes(body.getBytes(StandardCharsets.UTF_8).length)
                     .build();
 
@@ -309,8 +403,40 @@ public class ExecutionEngineService {
      */
     private static final ConnectionProvider NO_POOL = ConnectionProvider.newConnection();
 
+    /**
+     * Pooled provider replacing per-request connections for everything except an
+     * explicit opt-out. The staleness problem described above is real, but the fix
+     * for it is evicting our own idle connections before the server drops them
+     * (maxIdleTime/maxLifeTime + background eviction), not giving up reuse — which
+     * cost a full TCP+TLS handshake on every single request.
+     */
+    private ConnectionProvider pooledProvider;
+
+    @jakarta.annotation.PostConstruct
+    void initConnectionProvider() {
+        ExecutionEngineProperties.Pool cfg = properties.getPool();
+        if (!cfg.isEnabled()) {
+            log.info("Execution connection pooling disabled — using a fresh connection per request");
+            return;
+        }
+        pooledProvider = ConnectionProvider.builder("api-testing-exec")
+                .maxConnections(cfg.getMaxConnections())
+                .maxIdleTime(Duration.ofSeconds(cfg.getMaxIdleSeconds()))
+                .maxLifeTime(Duration.ofSeconds(cfg.getMaxLifeSeconds()))
+                .evictInBackground(Duration.ofSeconds(cfg.getEvictIntervalSeconds()))
+                .pendingAcquireTimeout(Duration.ofSeconds(cfg.getPendingAcquireTimeoutSeconds()))
+                .build();
+        log.info("Execution connection pool ready: maxConnections={} maxIdle={}s maxLife={}s; curl-only hosts={}",
+                cfg.getMaxConnections(), cfg.getMaxIdleSeconds(), cfg.getMaxLifeSeconds(), properties.getCurlHosts());
+    }
+
+    @jakarta.annotation.PreDestroy
+    void disposeConnectionProvider() {
+        if (pooledProvider != null) pooledProvider.dispose();
+    }
+
     private WebClient buildClient(ExecutionRequest request) throws SSLException {
-        HttpClient httpClient = HttpClient.create(NO_POOL)
+        HttpClient httpClient = HttpClient.create(pooledProvider != null ? pooledProvider : NO_POOL)
                 .responseTimeout(Duration.ofMillis(request.getTimeoutMs()))
                 .followRedirect(request.isFollowRedirects());
 

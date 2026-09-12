@@ -15,24 +15,12 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Runs a "Business Validation Check": fields the user has manually flagged as
- * business-required (independent of whatever the backend actually enforces) are
- * stripped from an otherwise-valid, already-saved request config, that variant is
- * executed, and the response is inspected for each field's key to see whether the
- * backend actually complained about it being missing.
+ * Strips the fields a user flagged as business-required from an otherwise-valid saved request,
+ * runs that variant, and inspects the response to see whether the backend actually enforces them.
  *
- * Required HEADER fields (Authorization, API keys, ...) are stripped and checked in
- * a separate execution from required QUERY_PARAM/FORM_DATA/BODY fields, with the
- * other group left valid in each. A header that gates the request (e.g. a missing
- * Authorization token) otherwise gets the backend to reject before it ever reaches
- * its own field validation, which would falsely report every data field as "NOT
- * enforced" regardless of whether the backend actually requires it — see
- * project_business_validation_masking_2026-09-03 memory for the demo case that
- * surfaced this (16 required fields, only Authorization ever showed enforced).
- *
- * Deliberately NOT wired into ScheduleWorker or any recurring run — this is an
- * on-demand check the user triggers manually, kept separate so it never adds
- * extra load to a live/production target on every scheduled cycle.
+ * Headers and data fields are stripped in two separate executions, each leaving the other group
+ * valid: a missing Authorization token makes the backend reject before its own field validation,
+ * which would falsely report every data field as "NOT enforced".
  */
 @Service
 @RequiredArgsConstructor
@@ -48,10 +36,8 @@ public class BusinessValidationService {
         return check(baseConfig, projectId, apiType, apiId, triggeredByEmail, null);
     }
 
-    /** @param executionHistoryId set only when this check is an auto-run triggered alongside a
-     *  real execution (Regular/Base/Collection/Group member) — links the saved run to that exact
-     *  ExecutionHistory row so a report always shows what was true for that specific run. Pass
-     *  null for the manual on-demand "Run Validation Check" button. */
+    /** @param executionHistoryId links this check to the exact run it piggybacked on, so a report
+     *  shows what was true for that run. Null for the manual "Run Validation Check" button. */
     public ValidationCheckResult check(ExecutionRequest baseConfig, Long projectId,
                                        BusinessValidationRun.ApiType apiType, Long apiId,
                                        String triggeredByEmail, Long executionHistoryId) {
@@ -73,10 +59,8 @@ public class BusinessValidationService {
             results.addAll(evaluate(response, headerFields));
         }
         if (!dataFields.isEmpty()) {
-            // Header-required fields (e.g. Authorization) stay valid/enabled here — otherwise
-            // this execution would hit the same auth-layer rejection as above and every data
-            // field would be misreported as "NOT enforced" without the backend ever having
-            // looked at them.
+            // Header fields stay valid here, or this run hits the same auth-layer rejection and
+            // every data field is misreported as "NOT enforced" without ever being looked at.
             ExecutionResponse response = executionEngine.execute(strip(baseConfig, dataFields));
             lastStatusCode = response.getStatusCode();
             results.addAll(evaluate(response, dataFields));
@@ -110,10 +94,8 @@ public class BusinessValidationService {
         String haystack = (response.getBody() == null ? "" : response.getBody()).toLowerCase();
         List<FieldValidationResult> out = new ArrayList<>();
         for (FieldRef ref : fields) {
-            // response.isSuccess() means "a real HTTP response came back" (any status code —
-            // even 400/503 count), not "status was 2xx". A false here is a transport-level
-            // failure (network/timeout/DNS), which never counts as "enforced" — that would
-            // misreport an unrelated infra issue as a passing business rule.
+            // isSuccess() means "a response came back at all", not 2xx. False is a transport
+            // failure, which must never count as enforced — that reports infra as a business rule.
             boolean enforced = response.isSuccess() && mentionsField(haystack, ref.key);
             FieldValidationResult r = new FieldValidationResult();
             r.setKey(ref.key);
@@ -130,21 +112,14 @@ public class BusinessValidationService {
         return !collectRequired(config).isEmpty();
     }
 
-    /** Convenience wrapper for the three execution paths (Regular/Base/Collection) that now
-     * auto-run this check alongside every real execution: skips silently when nothing is marked
-     * Required, and never lets a hiccup in the check itself (e.g. the stripped variant times out)
-     * fail the real execution it's piggybacking on — worst case, this contributes no signal.
-     * @return null when there was nothing to check or the check itself failed to run; true/false
-     * (whether every required field was actually enforced by the backend) otherwise. */
+    /** Wrapper for the execution paths that auto-run this check: skips when nothing is Required,
+     * and never lets a failure here fail the real execution it piggybacks on.
+     * @return null when there was nothing to check or the check itself failed. */
     public Boolean autoCheck(ExecutionRequest baseConfig, Long projectId, BusinessValidationRun.ApiType apiType,
                              Long apiId, String triggeredByEmail, Long executionHistoryId) {
-        // Never for a write method: check() sends its own extra live request(s) (up to two —
-        // one per stripped-fields group), and for POST/PUT/PATCH/DELETE against a real external
-        // system that's an extra live write on every single execution — e.g. a second "Add
-        // Khasra"/draft-creation attempt against godavari.mp.gov.in alongside the real one.
-        // GET/HEAD are idempotent, so the extra calls are harmless there; anything else is
-        // skipped outright rather than risking a duplicate write. See
-        // project_required_field_report_fix_deployed_2026-08-31 memory.
+        // Never for a write method: check() sends up to two extra live requests, which against a
+        // real external system means duplicate writes on every execution. GET/HEAD are idempotent
+        // so the extra calls are harmless; anything else is skipped rather than risk that.
         if (baseConfig.getMethod() != null && !"GET".equalsIgnoreCase(baseConfig.getMethod())
                 && !"HEAD".equalsIgnoreCase(baseConfig.getMethod())) {
             return null;
@@ -188,11 +163,9 @@ public class BusinessValidationService {
                 .map(this::toResult).orElse(null);
     }
 
-    /** Matches the field's raw key first, then falls back to looser variants — a backend's
-     * error text often names the field differently than the request key (e.g. "district is
-     * required" for a key of district_id): spaces instead of underscores, and/or the id/code
-     * suffix dropped. Without these fallbacks, a field the backend genuinely rejected still
-     * gets misreported as "NOT enforced" just because the wording didn't match verbatim. */
+    /** Raw key first, then looser variants: error text often names a field differently than the
+     * request key ("district is required" for district_id). Without the fallbacks, a genuinely
+     * rejected field is misreported as "NOT enforced" purely over wording. */
     private boolean mentionsField(String haystackLower, String key) {
         if (key == null || key.isBlank()) return false;
         for (String variant : fieldNameVariants(key.toLowerCase())) {
@@ -244,10 +217,9 @@ public class BusinessValidationService {
                 }
             }
         }
-        // JSON body fields have no natural row-per-field structure of their own (the body is a
-        // single free-text blob), so required-ness is tracked separately in requiredPayloadFields
-        // rather than derived from parsing the live body. Only JSON is supported — there's no
-        // safe generic way to remove one field from XML/TEXT/FORM_URLENCODED body text.
+        // The body is one free-text blob with no row-per-field structure, so required-ness is
+        // tracked in requiredPayloadFields instead. JSON only — there is no safe generic way to
+        // remove a single field from XML/TEXT/FORM_URLENCODED text.
         if (config.getBodyType() == ExecutionRequest.BodyType.JSON) {
             for (KeyValueItem p : config.getRequiredPayloadFields()) {
                 if (p.isRequired() && p.isEnabled() && p.getKey() != null && !p.getKey().isBlank()) {
@@ -258,12 +230,9 @@ public class BusinessValidationService {
         return out;
     }
 
-    /** Disables (never removes — keeps list indices stable) only the fields named in {@code
-     * toStrip}, so the existing enabled-checks already in ExecutionEngineService naturally omit
-     * them from the outgoing request, exactly like a user manually unchecking a row. Required
-     * fields NOT in {@code toStrip} are left enabled/valid — {@link #check} relies on this to
-     * test one group (header vs. data) at a time without the other group's absence masking the
-     * result. */
+    /** Disables rather than removes, so list indices stay stable and the engine's existing
+     * enabled-checks omit them exactly like a user unchecking a row. Fields outside {@code
+     * toStrip} stay enabled so one group can be tested without the other masking the result. */
     private ExecutionRequest strip(ExecutionRequest baseConfig, List<FieldRef> toStrip) {
         String json = toJson(baseConfig);
         ExecutionRequest variant = fromJson(json, ExecutionRequest.class);
@@ -288,10 +257,9 @@ public class BusinessValidationService {
         return variant;
     }
 
-    /** Removes each required BODY-source field's key from a JSON object body. Silently leaves
-     * the body untouched if it doesn't parse as a JSON object — a malformed/non-object body is
-     * the same "backend never got a chance to enforce it" situation the enforced=false result
-     * already reports correctly, so there's nothing extra to do here. */
+    /** Removes each required BODY field's key from a JSON object body, leaving a non-JSON body
+     * untouched — that is the same "never got a chance to enforce it" case enforced=false
+     * already reports correctly. */
     private String stripJsonFields(String body, List<FieldRef> required) {
         try {
             com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(body);

@@ -25,4 +25,8 @@ public class ApiException extends RuntimeException {
     public static ApiException internal(String message) {
         return new ApiException(message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
+
+    public static ApiException conflict(String message) {
+        return new ApiException(message, HttpStatus.CONFLICT);
+    }
 }

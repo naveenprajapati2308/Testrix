@@ -3,7 +3,7 @@ package com.automationportal.screenshots;
 import com.automationportal.common.ApiResponse;
 import com.automationportal.config.PortalAutomationProperties;
 import com.automationportal.executions.*;
-import com.automationportal.workspace.CurrentProjectService;
+import com.automationportal.security.CurrentProjectService;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

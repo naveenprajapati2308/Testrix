@@ -1,6 +1,6 @@
 package com.automationportal.integrationguide;
 
-import com.automationportal.auth.AuthenticatedUserService;
+import com.automationportal.security.CurrentUserService;
 import com.automationportal.common.ApiResponse;
 import com.automationportal.common.ImageSniffer;
 import org.slf4j.Logger;
@@ -25,15 +25,15 @@ import java.util.UUID;
 public class IntegrationGuideAdminController {
     private static final Logger log = LoggerFactory.getLogger(IntegrationGuideAdminController.class);
     private final IntegrationGuideSectionRepository repository;
-    private final AuthenticatedUserService authenticatedUserService;
+    private final CurrentUserService currentUserService;
 
     @Value("${portal.uploads.guide-images-dir:artifacts/guide-images}")
     private String guideImagesDir;
 
     public IntegrationGuideAdminController(IntegrationGuideSectionRepository repository,
-                                           AuthenticatedUserService authenticatedUserService) {
+                                           CurrentUserService currentUserService) {
         this.repository = repository;
-        this.authenticatedUserService = authenticatedUserService;
+        this.currentUserService = currentUserService;
     }
 
     public record SectionRequest(int sortOrder, String title, String body) {}
@@ -46,7 +46,7 @@ public class IntegrationGuideAdminController {
         section.setSortOrder(body.sortOrder());
         section.setTitle(body.title());
         section.setBody(body.body());
-        section.setUpdatedByUserId(authenticatedUserService.currentUser().getId());
+        section.setUpdatedByUserId(currentUserService.currentUser().id());
         return ApiResponse.ok(repository.save(section));
     }
 
@@ -59,7 +59,7 @@ public class IntegrationGuideAdminController {
         section.setSortOrder(body.sortOrder());
         section.setTitle(body.title());
         section.setBody(body.body());
-        section.setUpdatedByUserId(authenticatedUserService.currentUser().getId());
+        section.setUpdatedByUserId(currentUserService.currentUser().id());
         return ApiResponse.ok(repository.save(section));
     }
 
@@ -94,7 +94,7 @@ public class IntegrationGuideAdminController {
 
         String previousImagePath = section.getImagePath();
         section.setImagePath("/uploads/guide-images/" + filename);
-        section.setUpdatedByUserId(authenticatedUserService.currentUser().getId());
+        section.setUpdatedByUserId(currentUserService.currentUser().id());
         IntegrationGuideSection saved = repository.save(section);
         deleteImageFileIfExists(previousImagePath);
         return ApiResponse.ok(saved);
@@ -106,7 +106,7 @@ public class IntegrationGuideAdminController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Section not found"));
         String previousImagePath = section.getImagePath();
         section.setImagePath(null);
-        section.setUpdatedByUserId(authenticatedUserService.currentUser().getId());
+        section.setUpdatedByUserId(currentUserService.currentUser().id());
         IntegrationGuideSection saved = repository.save(section);
         deleteImageFileIfExists(previousImagePath);
         return ApiResponse.ok(saved);

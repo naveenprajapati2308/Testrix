@@ -1,9 +1,9 @@
 package com.automationportal.executions;
 
-import com.automationportal.auth.AuthenticatedUserService;
+import com.automationportal.security.CurrentUserService;
 import com.automationportal.common.ApiResponse;
 import com.automationportal.modules.ModuleRepository;
-import com.automationportal.workspace.CurrentProjectService;
+import com.automationportal.security.CurrentProjectService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -18,7 +18,7 @@ import java.util.Map;
 public class ExecutionController {
     private final ExecutionService service;
     private final ExecutionRepository repository;
-    private final AuthenticatedUserService authenticatedUserService;
+    private final CurrentUserService currentUserService;
     private final CurrentProjectService currentProjectService;
     private final ModuleRepository moduleRepository;
     private final java.net.http.HttpClient httpClient;
@@ -34,12 +34,12 @@ public class ExecutionController {
     }
 
     public ExecutionController(ExecutionService service, ExecutionRepository repository,
-                                AuthenticatedUserService authenticatedUserService,
+                                CurrentUserService currentUserService,
                                 CurrentProjectService currentProjectService,
                                 ModuleRepository moduleRepository) {
         this.service = service;
         this.repository = repository;
-        this.authenticatedUserService = authenticatedUserService;
+        this.currentUserService = currentUserService;
         this.currentProjectService = currentProjectService;
         this.moduleRepository = moduleRepository;
         this.httpClient = java.net.http.HttpClient.newBuilder()
@@ -49,7 +49,7 @@ public class ExecutionController {
 
     @PostMapping("/run")
     public ApiResponse<Execution> run(@Valid @RequestBody RunExecutionRequest request) {
-        return ApiResponse.created("Execution queued", service.queue(request, authenticatedUserService.currentUser().getId()));
+        return ApiResponse.created("Execution queued", service.queue(request, currentUserService.currentUser().id()));
     }
 
     @GetMapping
@@ -113,12 +113,12 @@ public class ExecutionController {
 
     @PostMapping("/{id}/rerun")
     public ApiResponse<Execution> rerun(@PathVariable Long id) {
-        return ApiResponse.created("Execution rerun queued", service.rerun(id, authenticatedUserService.currentUser().getId()));
+        return ApiResponse.created("Execution rerun queued", service.rerun(id, currentUserService.currentUser().id()));
     }
 
     @PostMapping("/{id}/rerun-failed")
     public ApiResponse<Execution> rerunFailed(@PathVariable Long id) {
-        return ApiResponse.created("Failed tests rerun queued", service.rerunFailed(id, authenticatedUserService.currentUser().getId()));
+        return ApiResponse.created("Failed tests rerun queued", service.rerunFailed(id, currentUserService.currentUser().id()));
     }
 
     @PostMapping("/{id}/state")

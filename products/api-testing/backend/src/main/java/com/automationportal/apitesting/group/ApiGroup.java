@@ -43,6 +43,11 @@ public class ApiGroup {
     @Column(name = "time_frequency", length = 20)
     private TimeFrequency timeFrequency;
 
+    /** Opt-in: a manual run emails its report only when this is set. Scheduled runs ignore it
+     *  and use the owning Schedule's own recipients list. */
+    @Column(name = "email_report", nullable = false)
+    private boolean emailReport = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

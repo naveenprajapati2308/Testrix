@@ -22,6 +22,8 @@ export default defineConfig({
     port: 5173,
     fs: { allow: ['..', '../../../../shared'] },
     proxy: {
+      // Session refresh and logout are owned by the platform service, not this product.
+      '/platform/api': { target: 'http://127.0.0.1:18081', rewrite: (p) => p.replace('/platform', '') },
       '/api':         'http://127.0.0.1:18080',
       '/uploads':     'http://127.0.0.1:18080',
       '/swagger-ui':  'http://127.0.0.1:18080',

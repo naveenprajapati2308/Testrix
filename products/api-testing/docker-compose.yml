@@ -42,10 +42,92 @@ services:
       PORTAL_JWT_SECRET: ${PORTAL_JWT_SECRET:?PORTAL_JWT_SECRET must be set in .env}
       # Execution reports are emailed via automation-portal's internal mail endpoint (same SMTP
       # account, same shared secret its execution-events endpoint already uses).
-      INTERNAL_MAIL_URL: http://automation-portal-backend:8080/api/internal/reports/mail
+      INTERNAL_MAIL_URL: http://testrix-platform-backend:8080/api/internal/reports/mail
       PORTAL_EVENTS_API_KEY: ${PORTAL_EVENTS_API_KEY:?PORTAL_EVENTS_API_KEY must be set in .env}
+      # Execution transport. Requests go through the pooled WebClient by default; only
+      # hosts listed here use the (far more expensive) curl subprocess — see
+      # ExecutionEngineService.requiresCurl. Set to "*" to force curl everywhere, which
+      # is the one-step rollback to the previous behaviour.
+      EXECUTION_CURL_HOSTS: ${EXECUTION_CURL_HOSTS:-godavari.mp.gov.in}
+      EXECUTION_POOL_ENABLED: ${EXECUTION_POOL_ENABLED:-true}
+      EXECUTION_POOL_MAX_CONNECTIONS: ${EXECUTION_POOL_MAX_CONNECTIONS:-200}
+      # Scheduler concurrency. Raising this is the main capacity lever now that a request
+      # no longer costs a whole OS process.
+      SCHEDULER_MAX_CONCURRENT: ${SCHEDULER_MAX_CONCURRENT:-20}
+      SCHEDULER_POLL_INTERVAL_MS: ${SCHEDULER_POLL_INTERVAL_MS:-15000}
+      SCHEDULER_CLAIM_BATCH_SIZE: ${SCHEDULER_CLAIM_BATCH_SIZE:-200}
+      # Fair share of each claim batch across projects, and spreading of
+      # wall-clock-anchored schedules. See SchedulerProperties for what each does.
+      SCHEDULER_FAIR_CLAIM: ${SCHEDULER_FAIR_CLAIM:-true}
+      SCHEDULER_JITTER_SECONDS: ${SCHEDULER_JITTER_SECONDS:-0}
+      # Max schedules one project may own. 0 disables the cap.
+      SCHEDULER_MAX_SCHEDULES_PER_PROJECT: ${SCHEDULER_MAX_SCHEDULES_PER_PROJECT:-100}
+      # Durable poller->executor queue. false = execute inline, the pre-queue behaviour.
+      SCHEDULER_QUEUE_ENABLED: ${SCHEDULER_QUEUE_ENABLED:-true}
+      SCHEDULER_QUEUE_POLL_INTERVAL_MS: ${SCHEDULER_QUEUE_POLL_INTERVAL_MS:-5000}
+      # This instance only writes queue rows for due schedules; api-testing-execution-service
+      # drains and runs them. "Run Now" is unaffected — it still executes directly on this
+      # instance's own scheduleWorkerExecutor pool (SCHEDULER_MAX_CONCURRENT above).
+      SCHEDULER_DRAIN_ENABLED: "false"
     ports:
       - "8081:8080"
+    volumes:
+      - api_testing_history_bodies:/app/history-bodies
+      - api_testing_form_data_files:/app/form-data-files
+    networks:
+      - testrix
+
+  # Dedicated, horizontally scalable execution fleet for scheduled runs — same image as
+  # api-testing-backend, only its role differs (SCHEDULER_POLLER_ENABLED=false below). Never
+  # addressed directly (no container_name, no host port): the gateway only ever routes to
+  # api-testing-backend, and this service exists purely to drain API_SCHEDULE_JOB and execute
+  # those calls, in parallel with however many replicas it's scaled to, e.g.:
+  #   docker compose up -d --scale api-testing-execution-service=4
+  api-testing-execution-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      testrix-mysql:
+        condition: service_healthy
+      api-testing-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    environment:
+      TZ: ${SCHEDULER_TZ:-Asia/Kolkata}
+      DB_URL: jdbc:mysql://testrix-mysql:3306/testrix_platform?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
+      REDIS_HOST: api-testing-redis
+      FRONTEND_URL: http://localhost:15000
+      HISTORY_BODY_STORE_DIR: /app/history-bodies
+      FORM_DATA_FILE_STORE_DIR: /app/form-data-files
+      APITESTING_ENCRYPTION_KEY: ${APITESTING_ENCRYPTION_KEY:?APITESTING_ENCRYPTION_KEY must be set in .env}
+      PORTAL_JWT_SECRET: ${PORTAL_JWT_SECRET:?PORTAL_JWT_SECRET must be set in .env}
+      INTERNAL_MAIL_URL: http://testrix-platform-backend:8080/api/internal/reports/mail
+      PORTAL_EVENTS_API_KEY: ${PORTAL_EVENTS_API_KEY:?PORTAL_EVENTS_API_KEY must be set in .env}
+      EXECUTION_CURL_HOSTS: ${EXECUTION_CURL_HOSTS:-godavari.mp.gov.in}
+      EXECUTION_POOL_ENABLED: ${EXECUTION_POOL_ENABLED:-true}
+      EXECUTION_POOL_MAX_CONNECTIONS: ${EXECUTION_POOL_MAX_CONNECTIONS:-200}
+      # Isolated from the backend's own SCHEDULER_MAX_CONCURRENT (which now only sizes its
+      # "Run Now" pool) — this is the real capacity lever for scheduled executions.
+      SCHEDULER_MAX_CONCURRENT: ${EXECUTION_SERVICE_MAX_CONCURRENT:-40}
+      SCHEDULER_POLL_INTERVAL_MS: ${SCHEDULER_POLL_INTERVAL_MS:-15000}
+      SCHEDULER_CLAIM_BATCH_SIZE: ${SCHEDULER_CLAIM_BATCH_SIZE:-200}
+      SCHEDULER_FAIR_CLAIM: ${SCHEDULER_FAIR_CLAIM:-true}
+      SCHEDULER_JITTER_SECONDS: ${SCHEDULER_JITTER_SECONDS:-0}
+      SCHEDULER_MAX_SCHEDULES_PER_PROJECT: ${SCHEDULER_MAX_SCHEDULES_PER_PROJECT:-100}
+      SCHEDULER_QUEUE_ENABLED: ${SCHEDULER_QUEUE_ENABLED:-true}
+      SCHEDULER_QUEUE_POLL_INTERVAL_MS: ${SCHEDULER_QUEUE_POLL_INTERVAL_MS:-5000}
+      # This instance only drains and executes queued jobs; it never scans for due
+      # schedules itself — api-testing-backend already does that.
+      SCHEDULER_POLLER_ENABLED: "false"
     volumes:
       - api_testing_history_bodies:/app/history-bodies
       - api_testing_form_data_files:/app/form-data-files

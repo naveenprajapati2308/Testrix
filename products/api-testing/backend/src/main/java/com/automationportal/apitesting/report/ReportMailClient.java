@@ -12,8 +12,8 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Sends the execution-report email through automation-portal's already-configured SMTP account
- * (see automation-portal's InternalMailController) instead of standing up a second mailer here.
+ * Sends the execution-report email through the platform service's configured SMTP account
+ * (see its InternalMailController) instead of standing up a second mailer here.
  * Failures are logged, never thrown — a report email going astray must not affect the
  * schedule/group's own recorded pass/fail result.
  */

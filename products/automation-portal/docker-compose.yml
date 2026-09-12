@@ -25,18 +25,10 @@ services:
       PORTAL_EXECUTION_MANAGER_URL: http://automation-execution-manager:8090
       PORTAL_ARTIFACT_SERVICE_URL: http://automation-report-artifacts:9091
       LOGGING_FILE_NAME: /app/logs/automation-portal.log
-      PORTAL_FRONTEND_URL: http://localhost:15000/automation
-      PORTAL_MAIL_CONSOLE_ONLY: ${PORTAL_MAIL_CONSOLE_ONLY:-false}
-      PORTAL_MAIL_FROM_NAME: ${PORTAL_MAIL_FROM_NAME:-Testrix}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
+      # Verification only — tokens are issued by testrix-platform-backend, which signs with
+      # this same secret. No SMTP/superadmin config here: mail and identity are platform
+      # services now, so this container has no reason to hold those credentials.
       PORTAL_JWT_SECRET: ${PORTAL_JWT_SECRET:?PORTAL_JWT_SECRET must be set in .env}
-      PORTAL_JWT_EXPIRATION_MINUTES: 30
-      PORTAL_JWT_REFRESH_EXPIRATION_DAYS: 14
-      PORTAL_SUPERADMIN_SEED_PASSWORD: ${PORTAL_SUPERADMIN_SEED_PASSWORD:?PORTAL_SUPERADMIN_SEED_PASSWORD must be set in .env}
-      PORTAL_SUPERADMIN_EMAIL: ${PORTAL_SUPERADMIN_EMAIL:?PORTAL_SUPERADMIN_EMAIL must be set in .env}
       PORTAL_EVENTS_API_KEY: ${PORTAL_EVENTS_API_KEY:?PORTAL_EVENTS_API_KEY must be set in .env}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     ports:

@@ -44,6 +44,34 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     int tryManualLock(@Param("id") Long id, @Param("by") String by,
                       @Param("until") Instant until, @Param("now") Instant now);
 
+    /**
+     * Lease heartbeat. The lease is deliberately short so a crashed instance's
+     * schedules become re-claimable quickly — but a job that simply takes longer
+     * than the lease would otherwise look identical to a crashed one and get
+     * re-claimed and run twice. The poller renews the lease on every tick for
+     * work it still owns, so "slow" and "dead" stop being indistinguishable.
+     * Scoped by lockedBy so it can never extend a lease this instance has
+     * already released or that another instance now owns.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+            UPDATE Schedule s SET s.lockedUntil = :until
+            WHERE s.id IN :ids AND s.lockedBy = :by
+            """)
+    int extendLease(@Param("ids") java.util.Collection<Long> ids,
+                    @Param("until") Instant until, @Param("by") String by);
+
+    /**
+     * Releases a claim without running it, so the next poll can pick it up —
+     * used when the worker pool has no room to accept the job.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+            UPDATE Schedule s SET s.lockedBy = null, s.lockedUntil = null
+            WHERE s.id = :id AND s.lockedBy = :by
+            """)
+    int releaseClaim(@Param("id") Long id, @Param("by") String by);
+
     long countByStatus(Schedule.Status status);
 
     List<Schedule> findByStatusAndLastRunStatus(Schedule.Status status, Schedule.RunStatus lastRunStatus);

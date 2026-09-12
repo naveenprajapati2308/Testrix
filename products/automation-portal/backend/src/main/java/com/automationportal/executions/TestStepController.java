@@ -1,7 +1,7 @@
 package com.automationportal.executions;
 
 import com.automationportal.common.ApiResponse;
-import com.automationportal.workspace.CurrentProjectService;
+import com.automationportal.security.CurrentProjectService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;

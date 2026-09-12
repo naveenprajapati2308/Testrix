@@ -210,6 +210,16 @@ declare the same external network name (`testrix_network`) and reference the sam
 container (`testrix-mysql`) by its Compose service name — Docker's embedded DNS resolves that name
 to whichever container is currently running, so services never need to know an IP address.
 
+`products/api-testing/docker-compose.yml` also defines `api-testing-execution-service` — the same
+image as `api-testing-backend`, running with `SCHEDULER_POLLER_ENABLED=false` so it only drains and
+executes the scheduled-run queue (`api-testing-backend` keeps serving the REST API, writing that
+queue, and running "Run Now" itself, via `SCHEDULER_DRAIN_ENABLED=false`). It has no fixed
+`container_name`/host port, so it scales independently of the backend:
+
+```
+docker compose up -d --scale api-testing-execution-service=4
+```
+
 | Concept | How Testrix uses it |
 |---|---|
 | Named volumes | `testrix_mysql_data`, `automation_portal_artifacts`, `api_testing_history_bodies`, `performance_testing_k6_runs`, etc. — Docker owns the storage location; survives container recreation, deleted only by explicit `docker volume rm`. |

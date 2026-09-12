@@ -32,14 +32,11 @@ export function ActionBtn({ icon: Icon, label, onClick, disabled, tone = 'defaul
   );
 }
 
-/**
- * Group management inside the Scheduler tab: latest groups with health,
- * drill-down into per-API status (incl. connected Base APIs and the actual
- * failure reason), run-now, membership and group scheduling.
- */
+/** Group management inside the Scheduler tab: health, per-API drill-down with failure reasons,
+ *  run-now, membership and group scheduling. */
 export default function GroupsPanel() {
   const qc = useQueryClient();
-  const emptyGroupForm = { name: '', description: '', groupType: 'MODULE', moduleId: '', timeFrequency: 'NOW' };
+  const emptyGroupForm = { name: '', description: '', groupType: 'MODULE', moduleId: '', timeFrequency: 'NOW', emailReport: false };
   const [form, setForm] = useState(emptyGroupForm);
   const [editingId, setEditingId] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -93,6 +90,7 @@ export default function GroupsPanel() {
         name: form.name, description: form.description || null, groupType: form.groupType,
         moduleId: form.groupType === 'MODULE' && form.moduleId ? Number(form.moduleId) : null,
         timeFrequency: form.groupType === 'TIME' ? form.timeFrequency : null,
+        emailReport: form.emailReport,
       };
       return editingId
         ? apiClient.put(`/v1/groups/${editingId}`, payload)
@@ -106,6 +104,7 @@ export default function GroupsPanel() {
       name: g.name, description: g.description ?? '', groupType: g.groupType,
       moduleId: g.moduleId != null ? String(g.moduleId) : '',
       timeFrequency: g.timeFrequency ?? 'NOW',
+      emailReport: !!g.emailReport,
     });
     setEditingId(g.id);
   };
@@ -115,6 +114,15 @@ export default function GroupsPanel() {
   });
   const runMut = useMutation({
     mutationFn: (id) => apiClient.post(`/v1/groups/${id}/execute`),
+    onSuccess: invalidate,
+  });
+  // Reuses the same PUT the edit form uses, so the checkbox needs no endpoint of its own.
+  const emailReportMut = useMutation({
+    mutationFn: (g) => apiClient.put(`/v1/groups/${g.id}`, {
+      name: g.name, description: g.description ?? null, groupType: g.groupType,
+      moduleId: g.moduleId ?? null, timeFrequency: g.timeFrequency ?? null,
+      emailReport: !g.emailReport,
+    }),
     onSuccess: invalidate,
   });
   const addMemberMut = useMutation({
@@ -187,6 +195,13 @@ export default function GroupsPanel() {
           <input className={inputCls} placeholder="Optional" value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </label>
+        <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] h-9 cursor-pointer"
+          title="When on, a report is emailed to whoever runs this group manually">
+          <input type="checkbox" checked={form.emailReport}
+            onChange={(e) => setForm({ ...form, emailReport: e.target.checked })}
+            className="h-4 w-4 cursor-pointer accent-[var(--accent)]" />
+          Email report after run
+        </label>
         <button disabled={!canCreate || createMut.isPending} onClick={() => createMut.mutate()}
           className="flex items-center gap-2 rounded-md bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 px-4 py-2 text-sm font-semibold text-white">
           {editingId ? <><Pencil size={14} /> Update Group</> : <><Plus size={14} /> Create Group</>}
@@ -216,12 +231,13 @@ export default function GroupsPanel() {
               <th className="text-left px-4 py-2 font-medium">Health</th>
               <th className="text-left px-4 py-2 font-medium">Last Run</th>
               <th className="text-left px-4 py-2 font-medium">Result</th>
+              <th className="text-center px-4 py-2 font-medium">Email Report</th>
               <th className="text-center px-4 py-2 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {groupsLoading && (
-              <tr><td colSpan={7} className="px-4 py-8"><div className="flex justify-center"><Loader size={22} /></div></td></tr>
+              <tr><td colSpan={8} className="px-4 py-8"><div className="flex justify-center"><Loader size={22} /></div></td></tr>
             )}
             {!groupsLoading && pagedGroups.map(({ group: g, memberCount, lastExecution: le }) => (
               <Fragment key={g.id}>
@@ -253,6 +269,17 @@ export default function GroupsPanel() {
                     : <span className="text-[var(--text-muted)]">—</span>}
                 </td>
                 <td className="px-4 py-2.5">
+                  <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={!!g.emailReport}
+                      onChange={() => emailReportMut.mutate(g)}
+                      disabled={emailReportMut.isPending}
+                      title={g.emailReport
+                        ? 'Report is emailed to you after every manual run of this group'
+                        : 'No email after a manual run of this group'}
+                      className="h-4 w-4 cursor-pointer accent-[var(--accent)]" />
+                  </div>
+                </td>
+                <td className="px-4 py-2.5">
                   <div className="flex items-center gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
                     <ActionBtn icon={Play} label="Run" tone="run"
                       onClick={() => runMut.mutate(g.id)} disabled={memberCount === 0 || runMut.isPending} />
@@ -265,7 +292,7 @@ export default function GroupsPanel() {
               </tr>
               {selectedId === g.id && (
                 <tr className="border-b border-[var(--border-soft)]">
-                  <td colSpan={7} className="p-0">
+                  <td colSpan={8} className="p-0">
                     <GroupExpand detail={detail} executions={executions} memberIds={memberIds}
                       regularApis={regularApis} runMut={runMut} addMemberMut={addMemberMut} removeMemberMut={removeMemberMut}
                       schedTime={schedTime} setSchedTime={setSchedTime} schedDay={schedDay} setSchedDay={setSchedDay}
@@ -276,7 +303,7 @@ export default function GroupsPanel() {
               </Fragment>
             ))}
             {!groupsLoading && groups.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-[var(--text-muted)]">No groups yet — create one above, then add Regular APIs to it</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-[var(--text-muted)]">No groups yet — create one above, then add Regular APIs to it</td></tr>
             )}
           </tbody>
         </table>
@@ -326,12 +353,8 @@ export default function GroupsPanel() {
   );
 }
 
-/**
- * Inline expansion content for a group row — same "expand in place, no
- * navigation" pattern as the Schedules tab's row drill-down. Shows the
- * group's member APIs (add/remove right here), its Run/Schedule actions,
- * and recent execution history.
- */
+/** Inline expansion for a group row — same expand-in-place pattern as the Schedules tab. Member
+ *  APIs, Run/Schedule actions, and recent execution history. */
 function GroupExpand({ detail, executions, memberIds, regularApis, runMut, addMemberMut, removeMemberMut,
   schedTime, setSchedTime, schedDay, setSchedDay, scheduleGroupMut, onSelectExecution }) {
   if (!detail) return <div className="px-4 py-3 bg-[var(--bg-inset)]"><Loader size={16} label="Loading group…" /></div>;
@@ -416,10 +439,7 @@ function GroupExpand({ detail, executions, memberIds, regularApis, runMut, addMe
   );
 }
 
-/**
- * One API call inside a group run. Click to expand: fetches the full history
- * record (request, response body, validation results) on first open.
- */
+/** One API call inside a group run. Expanding fetches its full history record on first open. */
 export function ExecRow({ h }) {
   const [open, setOpen] = useState(false);
   const passed = h.errorMessage == null

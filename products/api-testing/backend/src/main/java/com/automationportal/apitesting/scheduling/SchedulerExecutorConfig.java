@@ -15,9 +15,11 @@ public class SchedulerExecutorConfig {
 
     /**
      * Bounded worker pool: due schedules queue and drain at a controlled rate
-     * instead of firing simultaneously. CallerRunsPolicy applies natural
-     * backpressure — an overloaded pool slows the poller down rather than
-     * dropping work.
+     * instead of firing simultaneously. Backpressure is applied by refusing the
+     * job (AbortPolicy) so SchedulePoller can release the claim and retry it on a
+     * later tick — never by CallerRunsPolicy, which would run the job on the
+     * poller thread and stall polling (and the lease renewals that depend on it)
+     * for that job's entire duration, exactly when the system is busiest.
      */
     @Bean(name = "scheduleWorkerExecutor")
     public ThreadPoolTaskExecutor scheduleWorkerExecutor() {
@@ -26,7 +28,7 @@ public class SchedulerExecutorConfig {
         executor.setMaxPoolSize(properties.getMaxConcurrentExecutions());
         executor.setQueueCapacity(properties.getClaimBatchSize() * 2);
         executor.setThreadNamePrefix("sched-worker-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.initialize();
         return executor;
     }

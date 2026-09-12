@@ -6,6 +6,7 @@ import com.automationportal.perftesting.loadtest.LoadTestRepository;
 import com.automationportal.perftesting.group.TestGroupRepository;
 import com.automationportal.perftesting.security.CurrentProjectService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,11 @@ public class PerfTestScheduleService {
     private final TestGroupRepository testGroupRepository;
     private final CurrentProjectService currentProjectService;
 
+    /** Hard cap on schedules per project (paused ones counted too, otherwise pausing would
+     *  free a slot and the cap could be walked straight past). 0 or less means no limit. */
+    @Value("${perf.scheduler.max-schedules-per-project:100}")
+    private int maxSchedulesPerProject;
+
     @Transactional(readOnly = true)
     public List<PerfTestScheduleDto> getAll() {
         return repository.findByProjectId(currentProjectService.requireProjectId()).stream()
@@ -41,6 +47,10 @@ public class PerfTestScheduleService {
     @Transactional
     public PerfTestScheduleDto create(PerfTestSchedule dto) {
         Long projectId = currentProjectService.requireProjectId();
+        if (maxSchedulesPerProject > 0 && repository.countByProjectId(projectId) >= maxSchedulesPerProject) {
+            throw ApiException.conflict("This workspace already has its maximum of " + maxSchedulesPerProject
+                    + " schedules. Delete or replace an existing schedule before adding another.");
+        }
         // Validate Cron Expression
         if (!CronExpression.isValidExpression(dto.getCronExpression())) {
             throw ApiException.badRequest("Invalid CRON expression: " + dto.getCronExpression());

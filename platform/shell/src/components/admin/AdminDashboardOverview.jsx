@@ -9,10 +9,10 @@ import { Loader } from '../../../../../shared/ui/Loader.jsx';
 import { HealthDot, OverviewCard } from '../shared/OverviewCard.jsx';
 
 // Real health pings, same gateway routes the Global Dashboard already polls — never a fabricated
-// "all systems operational" placeholder. Platform API itself doesn't need its own ping: this page
-// only ever renders once /api/admin/users has already answered.
+// "all systems operational" placeholder. Each row is one independently deployable service, so a
+// red dot names the exact container to go and fix.
 const HEALTH_CHECKS = [
-  { key: 'portal', label: 'Platform API', path: null },
+  { key: 'portal', label: 'Platform API (Auth & Mail)', path: '/health/platform' },
   { key: 'automation', label: 'Automation Engine', path: '/health/automation' },
   { key: 'apitest', label: 'API Testing Engine', path: '/health/apitest' },
   { key: 'perf', label: 'Performance Engine', path: '/health/perf' },

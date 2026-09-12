@@ -172,10 +172,8 @@ function toTrendChartData(points) {
 
 export default function App() {
   const [authed, setAuthed] = useState(null);
-  // Bumped whenever the profile page patches the cached session's `user` object (name,
-  // profile image, etc.) — `session`/`user` below are recomputed from auth.get() on every
-  // render, but React only re-renders this component when its own state changes, so
-  // something has to change here too or the topbar keeps showing the stale cached user.
+  // user/session are recomputed from auth.get() on every render, but React only re-renders on
+  // its own state change — so this has to move too, or the topbar keeps the stale cached user.
   const [sessionTick, setSessionTick] = useState(0);
   const updateSessionUser = (patch) => {
     const current = auth.get();
@@ -228,30 +226,16 @@ export default function App() {
       setAuthed(false);
       return;
     }
-    const verify = async () => {
-      try {
-        const r = await fetch('/automation/api/auth/me', { headers: authHeader() });
-        if (r.ok) return setAuthed(true);
-        if (s.refreshToken) {
-          const rr = await fetch('/automation/api/auth/refresh', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: s.refreshToken })
-          });
-          if (rr.ok) {
-            auth.set(await rr.json());
-            return setAuthed(true);
-          }
-        }
-      } catch {
-        // Couldn't verify (network error, gateway hiccup, etc.) — fall through to
-        // logged-out below rather than assuming the session is still good. A stale
-        // or invalid session must never render the authenticated shell.
-      }
-      auth.clear();
-      setAuthed(false);
-    };
-    verify();
+    // api.me() already hits the platform auth service (PLATFORM_BASE) and retries once via
+    // refreshSession() on a 401 — reusing it here instead of a second hand-rolled fetch avoids
+    // drifting out of sync with where auth actually lives (it moved out of automation-portal
+    // into platform/backend; a stale duplicate here previously logged everyone out on refresh).
+    api.me()
+      .then(() => setAuthed(true))
+      .catch(() => {
+        auth.clear();
+        setAuthed(false);
+      });
   }, []);
 
   const forceLogout = () => {
@@ -261,17 +245,19 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!authed) return;
+    // Super Admin has no project context, so these project-scoped calls can only 403 — skip them
+    // rather than firing a round of guaranteed failures on every login. Gating on the role and
+    // not on `page` is deliberate: the Global Dashboard is the catch-all render branch, so any
+    // page value it falls through on would otherwise leave its data null and its loader spinning.
+    if (!authed || isSuperAdmin(auth.get())) return;
     fetch('/health/automation').then((r) => setHealth((h) => ({ ...h, automation: r.ok ? 'up' : 'down' }))).catch(() => setHealth((h) => ({ ...h, automation: 'down' })));
     fetch('/health/apitest').then((r) => setHealth((h) => ({ ...h, apitest: r.ok ? 'up' : 'down' }))).catch(() => setHealth((h) => ({ ...h, apitest: 'down' })));
     fetch('/health/genai').then((r) => setHealth((h) => ({ ...h, genai: r.ok ? 'up' : 'down' }))).catch(() => setHealth((h) => ({ ...h, genai: 'down' })));
     fetch('/health/perf').then((r) => setHealth((h) => ({ ...h, perf: r.ok ? 'up' : 'down' }))).catch(() => setHealth((h) => ({ ...h, perf: 'down' })));
 
-    // Returns a failure reason string (server-provided message if there is one) instead of
-    // throwing, so callers can collect "what actually went wrong" across a whole batch of
-    // parallel fetches rather than failing silently — this whole effect used to swallow every
-    // error, which is exactly why a real backend bug (Performance dashboard mis-reporting a
-    // plain "no active workspace" 403 as a 500) went unnoticed until someone checked DevTools.
+    // Returns a reason string instead of throwing, so a batch of parallel fetches can report
+    // what actually failed. This effect used to swallow every error, which is how a real backend
+    // bug went unnoticed until someone opened DevTools.
     const loadSummary = async (url, setter) => {
       try {
         const res = await fetch(url, { headers: authHeader() });
@@ -282,10 +268,8 @@ export default function App() {
           throw new Error(reason);
         }
         const body = await res.json();
-        // Both dashboard summary endpoints wrap their payload as { success, message, data } —
-        // unwrap here rather than storing the envelope, which silently rendered every stat as
-        // its `?? 0` fallback (only ever caught now because the DB has real execution data;
-        // it read as "correct" for months while every execution count was genuinely 0).
+        // Both summary endpoints wrap their payload in { success, message, data }. Storing the
+        // envelope silently rendered every stat as its ?? 0 fallback for months.
         setter(body.data ?? body);
         return null;
       } catch (err) {
@@ -294,10 +278,8 @@ export default function App() {
       }
     };
 
-    // Global Date Range Filter: every range-aware fetch below is keyed on `range` and
-    // fired together as one logical refresh (dashboardRefreshing gates a dim overlay,
-    // distinct from the first-load FullScreenLoader) rather than each widget polling
-    // independently. `days` (API Testing) is translated from the shared `range` token.
+    // Every range-aware fetch is keyed on `range` and fired as one refresh rather than each
+    // widget polling independently. `days` is API Testing's translation of that same token.
     const days = rangeToDays(range);
     let cancelled = false;
     (async () => {
@@ -333,7 +315,7 @@ export default function App() {
   // ModuleAnalyticsTable (same component the Automation product's own Overview page uses) —
   // fetched once on login rather than every range change, since they rarely change.
   useEffect(() => {
-    if (!authed) return;
+    if (!authed || isSuperAdmin(auth.get())) return;
     // Failures here already surface via the global api.setErrorCallback handler above (these
     // all go through api.js's request()/unwrap(), unlike the raw fetch() calls further up) —
     // just fall back to an empty list so the analytics table renders empty, not broken.
@@ -346,7 +328,7 @@ export default function App() {
   // framework + environmentId), so it's refetched on its own whenever the range or the table's
   // own Environment filter changes, without re-firing every other dashboard widget's fetch.
   const refreshAutoModuleHealth = () => {
-    if (!authed) return;
+    if (!authed || isSuperAdmin(auth.get())) return;
     // Failure already surfaces via the global api.setErrorCallback handler above.
     api.dashboardModuleHealth(range, autoSelectedEnvId || undefined)
       .then((data) => setAutoModuleHealth(Array.isArray(data) ? data : []))
@@ -409,18 +391,13 @@ export default function App() {
     refreshAutoModuleHealth();
   };
 
-  // api.js's request() clears localStorage on a real 401 but has no way to force
-  // this component's `authed` state back to the login screen on its own — wire it
-  // up here so every api.xxx() call in the shell (not just the dashboard's own
-  // fetches above) redirects to login instead of leaving a stale, broken page up.
+  // request() clears localStorage on a 401 but cannot reset this component's `authed` state,
+  // so wire it here — otherwise a dead session leaves a stale, broken page on screen.
   useEffect(() => {
     api.setErrorCallback(({ status, title, message }) => {
       if (status === 401) { forceLogout(); return; }
-      // Every api.xxx() call in the shell already computes a real title+message for
-      // 403/404/500+ here (unwrap() in api.js) — this callback existed but only ever
-      // acted on 401, so every other failure got silently swallowed with nothing shown
-      // on screen (visible only in DevTools' Network tab). Reuses the existing toast
-      // for now; a proper unified error-surface component is future work.
+      // unwrap() already computes a title+message for 403/404/500+, but this callback only ever
+      // acted on 401, so every other failure was swallowed with nothing shown on screen.
       notify(`${title}: ${message}`, 'error');
     });
   }, []);
@@ -431,19 +408,14 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  // The shell is the one persistent scroll container (embedded product
-  // iframes auto-size to their content, never scroll internally — see
-  // useIframeAutoHeight). Switching tabs swaps content in place rather than
-  // navigating, so the browser never resets scroll on its own; do it here.
+  // The shell is the only scroll container (product iframes auto-size instead of scrolling).
+  // Tab switches swap content in place, so the browser never resets scroll on its own.
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [page, adminPage, automationPage, apitestPage, perfPage]);
 
-  // Every internal nav click already does `window.location.hash = ...`, which
-  // pushes a real browser history entry — but nothing was listening for the
-  // reverse direction, so back/forward changed the URL without changing what
-  // was on screen. Re-parsing the hash on every hashchange (back/forward,
-  // manual URL edit, or a fresh `#/...` link) keeps the two in sync both ways.
+  // Nav clicks push history entries, but nothing listened for the reverse direction, so
+  // back/forward changed the URL without changing the screen. Re-parse on every hashchange.
   useEffect(() => {
     const onHashChange = () => {
       const r = parseHashRoute();
@@ -457,10 +429,8 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // docs/version2.2.md: Super Admin never works inside a project workspace — their session lives
-  // exclusively in the Admin Workspace shell (see the superAdmin-gated render below), so any
-  // stale/typed-in non-admin hash (an old bookmark, a leftover browser-history entry) is
-  // corrected back to Admin right after login rather than briefly showing workspace content.
+  // Super Admin never works inside a project workspace, so a stale non-admin hash (old bookmark,
+  // leftover history entry) is corrected back to Admin rather than flashing workspace content.
   useEffect(() => {
     if (!authed) return;
     if (isSuperAdmin(auth.get()) && page !== 'admin' && page !== 'profile') {

@@ -4,7 +4,7 @@ import com.automationportal.executions.*;
 import com.automationportal.modules.ModuleEntity;
 import com.automationportal.modules.ModuleRepository;
 import com.automationportal.testcasecatalog.TestCaseCatalogService;
-import com.automationportal.workspace.CurrentProjectService;
+import com.automationportal.security.CurrentProjectService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;

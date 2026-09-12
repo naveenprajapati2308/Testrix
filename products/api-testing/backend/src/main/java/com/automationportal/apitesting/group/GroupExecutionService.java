@@ -154,7 +154,8 @@ public class GroupExecutionService {
     }
 
     /** Report + email are best-effort: any failure here must never change the group's own
-     * recorded pass/fail result, so everything is caught and only logged. */
+     * recorded pass/fail result, so everything is caught and only logged. A manual run emails
+     * nothing unless the group opts in — scheduled runs already opt in via their recipients. */
     private void emailReport(ApiGroup group, ApiGroupExecution execution) {
         try {
             List<String> recipients;
@@ -163,6 +164,8 @@ public class GroupExecutionService {
                         : scheduleRepository.findById(execution.getScheduleId()).orElse(null);
                 recipients = schedule == null || schedule.getRecipients() == null
                         ? List.of() : Arrays.stream(schedule.getRecipients().split(",")).map(String::trim).toList();
+            } else if (!group.isEmailReport()) {
+                return;
             } else {
                 recipients = execution.getTriggeredByEmail() == null ? List.of() : List.of(execution.getTriggeredByEmail());
             }

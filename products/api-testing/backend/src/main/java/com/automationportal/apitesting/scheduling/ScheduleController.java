@@ -33,6 +33,8 @@ public class ScheduleController {
     private final org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor scheduleWorkerExecutor;
     private final CurrentProjectService currentProjectService;
     private final CurrentUserService currentUserService;
+    private final SchedulerProperties schedulerProperties;
+    private final ScheduleJobRepository scheduleJobRepository;
 
     @Data
     public static class SchedulePayload {
@@ -82,11 +84,44 @@ public class ScheduleController {
                 .toList();
     }
 
+    /**
+     * Queue depth for the caller's project, so a user waiting on a scheduled run can be
+     * told where they actually are instead of just seeing nothing happen. Global counts
+     * are included because the wait depends on the whole queue, not just this project's
+     * share of it.
+     */
+    @GetMapping("/queue-status")
+    public Map<String, Object> queueStatus() {
+        Long projectId = currentProjectService.requireProjectId();
+        long globalPending = scheduleJobRepository.countByStatus(ScheduleJob.Status.PENDING);
+        long globalRunning = scheduleJobRepository.countByStatus(ScheduleJob.Status.RUNNING);
+        int concurrency = Math.max(1, schedulerProperties.getMaxConcurrentExecutions());
+
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("queueEnabled", schedulerProperties.isQueueEnabled());
+        out.put("projectPending", scheduleJobRepository.countByProjectIdAndStatus(projectId, ScheduleJob.Status.PENDING));
+        out.put("projectRunning", scheduleJobRepository.countByProjectIdAndStatus(projectId, ScheduleJob.Status.RUNNING));
+        out.put("globalPending", globalPending);
+        out.put("globalRunning", globalRunning);
+        out.put("concurrency", concurrency);
+        // Deliberately coarse: batches still ahead x how long a batch takes. Good enough to
+        // set expectations, and honest about being an estimate rather than a promise.
+        out.put("estimatedWaitMinutes", (long) Math.ceil((double) globalPending / concurrency));
+        return out;
+    }
+
     @PostMapping
     public Schedule create(@Valid @RequestBody SchedulePayload payload) {
+        Long projectId = currentProjectService.requireProjectId();
+        int limit = schedulerProperties.getMaxSchedulesPerProject();
+        if (limit > 0 && repository.countByProjectId(projectId) >= limit) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This workspace already has its maximum of " + limit + " schedules. "
+                            + "Delete or replace an existing schedule before adding another.");
+        }
         Schedule s = new Schedule();
         apply(s, payload);
-        s.setProjectId(currentProjectService.requireProjectId());
+        s.setProjectId(projectId);
         s.setCreatedByEmail(currentUserService.currentEmail());
         s.setNextRunAt(initialNextRun(s)); // anchored types wait for their time; others run on the next poll tick
         s = repository.save(s);
@@ -127,7 +162,14 @@ public class ScheduleController {
         if (locked == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Schedule is already running");
         }
-        scheduleWorkerExecutor.execute(() -> scheduleWorker.run(id));
+        try {
+            scheduleWorkerExecutor.execute(() -> scheduleWorker.run(id));
+        } catch (java.util.concurrent.RejectedExecutionException ex) {
+            // Pool full. Rolling this transaction back also undoes the lock above,
+            // so the schedule is left free rather than stuck until its lease expires.
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Execution capacity is full right now — try again in a moment");
+        }
         auditService.record(currentProjectService.requireProjectId(),
                 com.automationportal.apitesting.audit.AuditLog.EntityType.SCHEDULE, id,
                 com.automationportal.apitesting.audit.AuditLog.Action.EXECUTE,

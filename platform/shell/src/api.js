@@ -1,5 +1,4 @@
-
-export const API_BASE = '/automation';
+import { PLATFORM_BASE, AUTOMATION_BASE } from './config.js';
 
 const authStore = {
   get: () => JSON.parse(localStorage.getItem('automationPortalAuth') || 'null'),
@@ -82,7 +81,7 @@ let inFlightRefresh = null;
 
 const refreshSession = (refreshToken) => {
   if (!inFlightRefresh) {
-    inFlightRefresh = fetch(`${API_BASE}/api/auth/refresh`, {
+    inFlightRefresh = fetch(`${PLATFORM_BASE}/api/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken })
@@ -94,6 +93,7 @@ const refreshSession = (refreshToken) => {
 };
 
 const request = async (path, options = {}, retryCount = 0) => {
+  const base = options.base ?? PLATFORM_BASE;
   const session = authStore.get();
   const headers = {
     ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
@@ -102,7 +102,7 @@ const request = async (path, options = {}, retryCount = 0) => {
   };
   let response;
   try {
-    response = await fetch(API_BASE + path, { ...options, headers });
+    response = await fetch(base + path, { ...options, headers });
   } catch (error) {
     const msg = 'Unable to connect to the server. Please check that the backend is running and try again.';
     const detail = `Request Endpoint: ${path}\nHTTP Method: ${options.method || 'GET'}\nError Type: ${error.name || 'NetworkError'}\nSystem Message: ${error.message}\n\nTroubleshooting:\n- Verify that the backend docker containers are running.\n- Check if there is an active internet connection.\n- Ensure the port 8080 is accessible.`;
@@ -139,6 +139,11 @@ const request = async (path, options = {}, retryCount = 0) => {
 };
 
 export const auth = authStore;
+
+// Calls that belong to the automation product rather than the platform. Split out so that an
+// automation outage takes down only the screens below the "Test Engines" marker in the map
+// below — sign-in, profile and user administration keep working.
+const areq = (path, options = {}) => request(path, { ...options, base: AUTOMATION_BASE });
 
 export const api = {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -204,22 +209,22 @@ export const api = {
   toggleWorkspaceModule: (projectId, moduleType, enabled) => request(`/api/projects/${projectId}/settings/modules/${moduleType}`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
 
   // ── Test Engines (docs/version2.3.md Plan 2) ────────────────────────────────
-  testEngines: () => request('/api/test-engines'),
-  registerTestEngine: (payload) => request('/api/test-engines', { method: 'POST', body: JSON.stringify(payload) }),
-  updateTestEngine: (id, payload) => request(`/api/test-engines/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  disableTestEngine: (id) => request(`/api/test-engines/${id}`, { method: 'DELETE' }),
-  rotateTestEngineCredential: (id) => request(`/api/test-engines/${id}/credential/rotate`, { method: 'POST' }),
-  revokeTestEngineCredential: (id) => request(`/api/test-engines/${id}/credential/revoke`, { method: 'POST' }),
-  // Raw fetch, not the JSON-envelope `request()` helper — this endpoint streams a zip file body.
+  testEngines: () => areq('/api/test-engines'),
+  registerTestEngine: (payload) => areq('/api/test-engines', { method: 'POST', body: JSON.stringify(payload) }),
+  updateTestEngine: (id, payload) => areq(`/api/test-engines/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  disableTestEngine: (id) => areq(`/api/test-engines/${id}`, { method: 'DELETE' }),
+  rotateTestEngineCredential: (id) => areq(`/api/test-engines/${id}/credential/rotate`, { method: 'POST' }),
+  revokeTestEngineCredential: (id) => areq(`/api/test-engines/${id}/credential/revoke`, { method: 'POST' }),
+  // Raw fetch, not the JSON-envelope `areq()` helper — this endpoint streams a zip file body.
   downloadEngineStarterKit: async (id, apiKey) => {
     const session = authStore.get();
-    const response = await fetch(`${API_BASE}/api/test-engines/${id}/starter-kit`, {
+    const response = await fetch(`${AUTOMATION_BASE}/api/test-engines/${id}/starter-kit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {})
       },
-      body: JSON.stringify({ apiKey: apiKey || null, portalUrl: `${window.location.origin}${API_BASE}` })
+      body: JSON.stringify({ apiKey: apiKey || null, portalUrl: `${window.location.origin}${AUTOMATION_BASE}` })
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -239,90 +244,90 @@ export const api = {
   },
 
   // ── Portal ────────────────────────────────────────────────────────────────
-  dashboardSummary: () => request('/api/dashboard/summary'),
-  dashboardTrends: (range) => request(`/api/dashboard/trends?range=${range || '7d'}`),
-  dashboardModuleHealth: (range, environmentId) => request(`/api/dashboard/module-health?range=${range || '30d'}${environmentId ? `&environmentId=${environmentId}` : ''}`),
-  dashboardRecentActivity: () => request('/api/dashboard/recent-activity'),
-  dashboardFailureAnalysis: (range) => request(`/api/dashboard/failure-analysis?range=${range || '30d'}`),
-  dashboardSlowTests: (range) => request(`/api/dashboard/slow-tests?range=${range || '30d'}`),
-  dashboardFlakyTests: (range) => request(`/api/dashboard/flaky-tests?range=${range || '30d'}`),
-  dashboardPassRateTrend: (range) => request(`/api/dashboard/pass-rate-trend?range=${range || '7d'}`),
-  dashboardDurationTrend: (range) => request(`/api/dashboard/duration-trend?range=${range || '7d'}`),
-  dashboardHeatmap: (range) => request(`/api/dashboard/heatmap?range=${range || '7d'}`),
-  dashboardEnvDistribution: (range) => request(`/api/dashboard/env-distribution?range=${range || '30d'}`),
-  dashboardRegressionAlerts: () => request('/api/dashboard/regression-alerts'),
-  getTestSteps: (testCaseId) => request(`/api/test-cases/${testCaseId}/steps`),
+  dashboardSummary: () => areq('/api/dashboard/summary'),
+  dashboardTrends: (range) => areq(`/api/dashboard/trends?range=${range || '7d'}`),
+  dashboardModuleHealth: (range, environmentId) => areq(`/api/dashboard/module-health?range=${range || '30d'}${environmentId ? `&environmentId=${environmentId}` : ''}`),
+  dashboardRecentActivity: () => areq('/api/dashboard/recent-activity'),
+  dashboardFailureAnalysis: (range) => areq(`/api/dashboard/failure-analysis?range=${range || '30d'}`),
+  dashboardSlowTests: (range) => areq(`/api/dashboard/slow-tests?range=${range || '30d'}`),
+  dashboardFlakyTests: (range) => areq(`/api/dashboard/flaky-tests?range=${range || '30d'}`),
+  dashboardPassRateTrend: (range) => areq(`/api/dashboard/pass-rate-trend?range=${range || '7d'}`),
+  dashboardDurationTrend: (range) => areq(`/api/dashboard/duration-trend?range=${range || '7d'}`),
+  dashboardHeatmap: (range) => areq(`/api/dashboard/heatmap?range=${range || '7d'}`),
+  dashboardEnvDistribution: (range) => areq(`/api/dashboard/env-distribution?range=${range || '30d'}`),
+  dashboardRegressionAlerts: () => areq('/api/dashboard/regression-alerts'),
+  getTestSteps: (testCaseId) => areq(`/api/test-cases/${testCaseId}/steps`),
 
-  environments: () => request('/api/environments'),
-  environmentsHealth: () => request('/api/environments/health'),
-  createEnvironment: (payload) => request('/api/environments', { method: 'POST', body: JSON.stringify(payload) }),
-  updateEnvironment: (id, payload) => request(`/api/environments/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  deleteEnvironment: (id) => request(`/api/environments/${id}`, { method: 'DELETE' }),
-  environmentModules: (id, framework) => request(`/api/environments/${id}/modules${framework ? `?framework=${framework}` : ''}`),
+  environments: () => areq('/api/environments'),
+  environmentsHealth: () => areq('/api/environments/health'),
+  createEnvironment: (payload) => areq('/api/environments', { method: 'POST', body: JSON.stringify(payload) }),
+  updateEnvironment: (id, payload) => areq(`/api/environments/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteEnvironment: (id) => areq(`/api/environments/${id}`, { method: 'DELETE' }),
+  environmentModules: (id, framework) => areq(`/api/environments/${id}/modules${framework ? `?framework=${framework}` : ''}`),
 
-  configurations: () => request('/api/configurations'),
-  updateConfiguration: (key, payload) => request(`/api/configurations/${key}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  configurations: () => areq('/api/configurations'),
+  updateConfiguration: (key, payload) => areq(`/api/configurations/${key}`, { method: 'PUT', body: JSON.stringify(payload) }),
 
   // ── Integration Guide ────────────────────────────────────────────────────
-  integrationGuide: () => request('/api/integration-guide'),
-  adminCreateGuideSection: (payload) => request('/api/admin/integration-guide', { method: 'POST', body: JSON.stringify(payload) }),
-  adminUpdateGuideSection: (id, payload) => request(`/api/admin/integration-guide/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  adminDeleteGuideSection: (id) => request(`/api/admin/integration-guide/${id}`, { method: 'DELETE' }),
+  integrationGuide: () => areq('/api/integration-guide'),
+  adminCreateGuideSection: (payload) => areq('/api/admin/integration-guide', { method: 'POST', body: JSON.stringify(payload) }),
+  adminUpdateGuideSection: (id, payload) => areq(`/api/admin/integration-guide/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  adminDeleteGuideSection: (id) => areq(`/api/admin/integration-guide/${id}`, { method: 'DELETE' }),
   adminUploadGuideSectionImage: (id, file) => {
     const form = new FormData();
     form.append('file', file);
-    return request(`/api/admin/integration-guide/${id}/image`, { method: 'POST', body: form });
+    return areq(`/api/admin/integration-guide/${id}/image`, { method: 'POST', body: form });
   },
-  adminRemoveGuideSectionImage: (id) => request(`/api/admin/integration-guide/${id}/image`, { method: 'DELETE' }),
+  adminRemoveGuideSectionImage: (id) => areq(`/api/admin/integration-guide/${id}/image`, { method: 'DELETE' }),
 
-  modules: (framework) => request(`/api/modules${framework ? `?framework=${framework}` : ''}`),
-  moduleEnvironments: (moduleId) => request(`/api/modules/${moduleId}/environments`),
-  moduleEnvironmentOptions: (moduleId, environmentId) => request(`/api/modules/${moduleId}/environments/${environmentId}/options`),
+  modules: (framework) => areq(`/api/modules${framework ? `?framework=${framework}` : ''}`),
+  moduleEnvironments: (moduleId) => areq(`/api/modules/${moduleId}/environments`),
+  moduleEnvironmentOptions: (moduleId, environmentId) => areq(`/api/modules/${moduleId}/environments/${environmentId}/options`),
 
   // ── Admin: Module Management (SUPER_ADMIN only) ───────────────────────────
-  adminListModules: () => request('/api/admin/modules'),
-  adminCreateModule: (payload) => request('/api/admin/modules', { method: 'POST', body: JSON.stringify(payload) }),
-  adminUpdateModule: (id, payload) => request(`/api/admin/modules/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  adminDeleteModule: (id) => request(`/api/admin/modules/${id}`, { method: 'DELETE' }),
-  adminToggleModule: (id) => request(`/api/admin/modules/${id}/toggle`, { method: 'PATCH' }),
-  adminListTestEngines: () => request('/api/admin/test-engines'),
+  adminListModules: () => areq('/api/admin/modules'),
+  adminCreateModule: (payload) => areq('/api/admin/modules', { method: 'POST', body: JSON.stringify(payload) }),
+  adminUpdateModule: (id, payload) => areq(`/api/admin/modules/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  adminDeleteModule: (id) => areq(`/api/admin/modules/${id}`, { method: 'DELETE' }),
+  adminToggleModule: (id) => areq(`/api/admin/modules/${id}/toggle`, { method: 'PATCH' }),
+  adminListTestEngines: () => areq('/api/admin/test-engines'),
 
   // ── Admin: Module <-> Environment mapping (overrides + enable/disable) ────
-  adminListModuleEnvironments: (moduleId) => request(`/api/admin/module-environments${moduleId ? `?moduleId=${moduleId}` : ''}`),
-  adminCreateModuleEnvironment: (payload) => request('/api/admin/module-environments', { method: 'POST', body: JSON.stringify(payload) }),
-  adminUpdateModuleEnvironment: (id, payload) => request(`/api/admin/module-environments/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  adminDeleteModuleEnvironment: (id) => request(`/api/admin/module-environments/${id}`, { method: 'DELETE' }),
+  adminListModuleEnvironments: (moduleId) => areq(`/api/admin/module-environments${moduleId ? `?moduleId=${moduleId}` : ''}`),
+  adminCreateModuleEnvironment: (payload) => areq('/api/admin/module-environments', { method: 'POST', body: JSON.stringify(payload) }),
+  adminUpdateModuleEnvironment: (id, payload) => areq(`/api/admin/module-environments/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  adminDeleteModuleEnvironment: (id) => areq(`/api/admin/module-environments/${id}`, { method: 'DELETE' }),
   executions: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return request('/api/executions' + (qs ? '?' + qs : ''));
+    return areq('/api/executions' + (qs ? '?' + qs : ''));
   },
-  runExecution: (payload) => request('/api/executions/run', { method: 'POST', body: JSON.stringify(payload) }),
-  executionDetails: (id) => request(`/api/executions/${id}`),
-  executionTestCases: (id) => request(`/api/executions/${id}/test-cases`),
-  executionArtifacts: (id) => request(`/api/executions/${id}/artifacts`),
-  executionLogs: (id) => request(`/api/executions/${id}/logs`),
-  executionSummary: (id) => request(`/api/executions/${id}/summary`),
-  deleteExecution: (id) => request(`/api/executions/${id}`, { method: 'DELETE' }),
-  cancelExecution: (id) => request(`/api/executions/${id}/cancel`, { method: 'POST' }),
-  rerunExecution: (id) => request(`/api/executions/${id}/rerun`, { method: 'POST' }),
-  rerunFailedExecution: (id) => request(`/api/executions/${id}/rerun-failed`, { method: 'POST' }),
-  runnerSuites: (framework = 'MAVEN_TESTNG') => request(`/api/executions/runner/suites?framework=${framework}`),
-  frameworks: () => request('/api/frameworks'),
+  runExecution: (payload) => areq('/api/executions/run', { method: 'POST', body: JSON.stringify(payload) }),
+  executionDetails: (id) => areq(`/api/executions/${id}`),
+  executionTestCases: (id) => areq(`/api/executions/${id}/test-cases`),
+  executionArtifacts: (id) => areq(`/api/executions/${id}/artifacts`),
+  executionLogs: (id) => areq(`/api/executions/${id}/logs`),
+  executionSummary: (id) => areq(`/api/executions/${id}/summary`),
+  deleteExecution: (id) => areq(`/api/executions/${id}`, { method: 'DELETE' }),
+  cancelExecution: (id) => areq(`/api/executions/${id}/cancel`, { method: 'POST' }),
+  rerunExecution: (id) => areq(`/api/executions/${id}/rerun`, { method: 'POST' }),
+  rerunFailedExecution: (id) => areq(`/api/executions/${id}/rerun-failed`, { method: 'POST' }),
+  runnerSuites: (framework = 'MAVEN_TESTNG') => areq(`/api/executions/runner/suites?framework=${framework}`),
+  frameworks: () => areq('/api/frameworks'),
 
   reportsList: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return request('/api/reports' + (qs ? '?' + qs : ''));
+    return areq('/api/reports' + (qs ? '?' + qs : ''));
   },
-  reportDetails: (id) => request(`/api/reports/${id}`),
-  reportFailedTests: (id) => request(`/api/reports/${id}/failed-tests`),
+  reportDetails: (id) => areq(`/api/reports/${id}`),
+  reportFailedTests: (id) => areq(`/api/reports/${id}/failed-tests`),
 
   screenshotsList: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return request('/api/screenshots' + (qs ? '?' + qs : ''));
+    return areq('/api/screenshots' + (qs ? '?' + qs : ''));
   },
-  deleteScreenshot: (testCaseId) => request(`/api/screenshots/${testCaseId}`, { method: 'DELETE' }),
+  deleteScreenshot: (testCaseId) => areq(`/api/screenshots/${testCaseId}`, { method: 'DELETE' }),
 
-  compareExecutions: (baseId, targetId) => request(`/api/compare/executions?baseExecutionId=${baseId}&targetExecutionId=${targetId}`),
-  compareLatest: (module) => request(`/api/compare/latest?module=${module}`),
+  compareExecutions: (baseId, targetId) => areq(`/api/compare/executions?baseExecutionId=${baseId}&targetExecutionId=${targetId}`),
+  compareLatest: (module) => areq(`/api/compare/latest?module=${module}`),
   setErrorCallback: (cb) => { globalErrorCallback = cb; }
 };

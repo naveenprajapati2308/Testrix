@@ -6,10 +6,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.Map;
@@ -41,6 +43,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> typeMismatch(MethodArgumentTypeMismatchException ex) {
         return body(HttpStatus.BAD_REQUEST, "Invalid value for parameter '" + ex.getName() + "'");
+    }
+
+    /** A missing required query param is the caller's mistake, not ours — without this it falls
+     *  into the catch-all below and reports 500, hiding real server errors among client ones. */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> missingParam(MissingServletRequestParameterException ex) {
+        return body(HttpStatus.BAD_REQUEST, "Required parameter '" + ex.getParameterName() + "' is missing");
+    }
+
+    /** An unmapped path is a 404, not a 500 — same reason as missingParam above. */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> notFound(NoResourceFoundException ex) {
+        return body(HttpStatus.NOT_FOUND, "No such endpoint: " + ex.getResourcePath());
     }
 
     /** Controllers' own 4xx errors pass through with their reason intact. */

@@ -17,6 +17,13 @@ spring:
     url: ${DB_URL:jdbc:mysql://localhost:3307/testrix_platform?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
+    hikari:
+      # Unset before this, which left Spring Boot's default of 10 — too small once an
+      # execution-service instance runs SCHEDULER_MAX_CONCURRENT concurrent schedule/group
+      # executions, each writing history and status. 15 is still well below one connection
+      # per thread: most of that concurrency is time spent waiting on the *target* API over
+      # the network, not holding a DB connection.
+      maximum-pool-size: ${DB_POOL_SIZE:15}
   jpa:
     hibernate:
       # Flyway owns the schema from V1 onward. Hibernate never generates DDL.
@@ -54,6 +61,21 @@ apitesting:
     # unset. Never rotate this casually: changing it makes every already-encrypted collection
     # credential permanently undecryptable without a dedicated re-encryption migration.
     key: ${APITESTING_ENCRYPTION_KEY}
+  execution:
+    # Comma-separated hosts (exact host or any subdomain) that must go through the
+    # system curl binary instead of the pooled WebClient. godavari.mp.gov.in is here
+    # because it rate-limits by client fingerprint and only curl's got through —
+    # confirmed live 2026-08-21. Every other host uses WebClient: one process per
+    # request does not survive real scheduler load, and curl also returns no response
+    # headers and no TTFB. Set to "*" to force curl for everything (rollback switch).
+    curl-hosts: ${EXECUTION_CURL_HOSTS:godavari.mp.gov.in}
+    pool:
+      enabled: ${EXECUTION_POOL_ENABLED:true}
+      max-connections: ${EXECUTION_POOL_MAX_CONNECTIONS:200}
+      max-idle-seconds: ${EXECUTION_POOL_MAX_IDLE_SECONDS:20}
+      max-life-seconds: ${EXECUTION_POOL_MAX_LIFE_SECONDS:300}
+      evict-interval-seconds: ${EXECUTION_POOL_EVICT_INTERVAL_SECONDS:30}
+      pending-acquire-timeout-seconds: ${EXECUTION_POOL_PENDING_ACQUIRE_TIMEOUT_SECONDS:45}
   scheduler:
     poll-interval-ms: ${SCHEDULER_POLL_INTERVAL_MS:15000}
     claim-batch-size: ${SCHEDULER_CLAIM_BATCH_SIZE:200}
@@ -61,6 +83,26 @@ apitesting:
     lock-lease-seconds: ${SCHEDULER_LOCK_LEASE_SECONDS:60}
     default-max-retries: ${SCHEDULER_DEFAULT_MAX_RETRIES:3}
     instance-id: ${HOSTNAME:local}
+    # Durable queue between the poller and the executor (API_SCHEDULE_JOB). Off makes the
+    # poller execute inline exactly as it did before the queue existed — the rollback switch.
+    queue-enabled: ${SCHEDULER_QUEUE_ENABLED:true}
+    # Splits the two queue-mode roles across instances: the REST backend can write rows
+    # without draining them (SCHEDULER_DRAIN_ENABLED=false), letting a separately scaled
+    # execution-service fleet run with SCHEDULER_POLLER_ENABLED=false instead — draining and
+    # executing only. Both default true, i.e. one instance does everything, as today.
+    poller-enabled: ${SCHEDULER_POLLER_ENABLED:true}
+    drain-enabled: ${SCHEDULER_DRAIN_ENABLED:true}
+    queue-poll-interval-ms: ${SCHEDULER_QUEUE_POLL_INTERVAL_MS:5000}
+    queue-retention-days: ${SCHEDULER_QUEUE_RETENTION_DAYS:7}
+    # Hard cap on schedules per project (paused ones counted too). 0 = unlimited.
+    max-schedules-per-project: ${SCHEDULER_MAX_SCHEDULES_PER_PROJECT:100}
+    # Round-robin the claim batch across projects so one project with a huge backlog
+    # can't fill every batch and starve the rest. No effect on a single-project setup.
+    fair-claim-enabled: ${SCHEDULER_FAIR_CLAIM:true}
+    claim-candidate-multiplier: ${SCHEDULER_CLAIM_CANDIDATE_MULTIPLIER:5}
+    # Spread wall-clock-anchored schedules (DAILY/WEEKLY/CRON) over this many seconds
+    # using a fixed per-schedule offset. 0 = off, keeping today's exact firing times.
+    jitter-seconds: ${SCHEDULER_JITTER_SECONDS:0}
   history:
     inline-body-max-bytes: ${HISTORY_INLINE_BODY_MAX_BYTES:51200}
     retention-days: ${HISTORY_RETENTION_DAYS:90}
@@ -73,10 +115,10 @@ apitesting:
 
 report:
   mail:
-    # Execution reports send mail through automation-portal's already-configured SMTP account
-    # (see automation-portal's InternalMailController) instead of standing up a second mailer
-    # here. Same shared secret automation-portal's own execution-events endpoint already uses.
-    internal-url: ${INTERNAL_MAIL_URL:http://localhost:18080/api/internal/reports/mail}
+    # Execution reports send mail through the platform service's one configured SMTP account
+    # (see its InternalMailController) instead of standing up a second mailer here. Mail is a
+    # platform-wide service precisely so no product depends on another product for it.
+    internal-url: ${INTERNAL_MAIL_URL:http://localhost:18081/api/internal/reports/mail}
     api-key: ${PORTAL_EVENTS_API_KEY}
 
 security:

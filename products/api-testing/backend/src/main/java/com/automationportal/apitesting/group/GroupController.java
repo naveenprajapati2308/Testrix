@@ -62,6 +62,7 @@ public class GroupController {
         @NotNull private ApiGroup.GroupType groupType;
         private Long moduleId;                       // MODULE groups
         private ApiGroup.TimeFrequency timeFrequency; // TIME groups
+        private boolean emailReport;                 // email the report after a manual run
     }
 
     @Data
@@ -370,6 +371,7 @@ public class GroupController {
         group.setName(p.getName().trim());
         group.setDescription(p.getDescription());
         group.setGroupType(p.getGroupType());
+        group.setEmailReport(p.isEmailReport());
         if (p.getGroupType() == ApiGroup.GroupType.MODULE) {
             group.setModuleId(p.getModuleId());
             group.setTimeFrequency(null);

@@ -33,6 +33,7 @@ import java.time.temporal.TemporalAdjusters;
 @RequiredArgsConstructor
 public class ScheduleWorker {
 
+    private final SchedulerProperties properties;
     private final ScheduleRepository scheduleRepository;
     private final RegularApiRepository regularApiRepository;
     private final DependencyExecutionService dependencyExecutionService;
@@ -74,7 +75,7 @@ public class ScheduleWorker {
             if (httpOk && validationOk) {
                 schedule.setLastRunStatus(Schedule.RunStatus.SUCCESS);
                 schedule.setRetryCount(0);
-                schedule.setNextRunAt(computeNextRun(schedule, now));
+                schedule.setNextRunAt(nextRunWithJitter(schedule, now));
             } else if (response.isTimedOut()) {
                 schedule.setLastRunStatus(Schedule.RunStatus.TIMEOUT);
                 applyRetryOrAdvance(schedule, now);
@@ -112,7 +113,7 @@ public class ScheduleWorker {
         if (execution.getStatus() == com.automationportal.apitesting.group.ApiGroupExecution.Status.SUCCESS) {
             schedule.setLastRunStatus(Schedule.RunStatus.SUCCESS);
             schedule.setRetryCount(0);
-            schedule.setNextRunAt(computeNextRun(schedule, now));
+            schedule.setNextRunAt(nextRunWithJitter(schedule, now));
         } else {
             schedule.setLastRunStatus(Schedule.RunStatus.FAILED);
             applyRetryOrAdvance(schedule, now);
@@ -152,7 +153,7 @@ public class ScheduleWorker {
             schedule.setNextRunAt(now.plus(backoff(schedule.getRetryCount())));
         } else {
             schedule.setRetryCount(0);
-            schedule.setNextRunAt(computeNextRun(schedule, now));
+            schedule.setNextRunAt(nextRunWithJitter(schedule, now));
         }
     }
 
@@ -166,6 +167,29 @@ public class ScheduleWorker {
 
     static Instant computeNextRun(Schedule schedule, Instant from) {
         return computeNextRun(schedule.getFrequencyType(), schedule.getFrequencyValue(), from);
+    }
+
+    /**
+     * Anchored slot plus this schedule's own fixed offset inside the jitter window.
+     * The offset is derived from the id, so a schedule keeps the same slot on every
+     * run instead of wandering, while thousands of schedules sharing one boundary
+     * (the "everyone picked midnight" case) end up spread across the window.
+     *
+     * <p>Only DAILY/WEEKLY/CRON are shifted — they are the ones that anchor to a
+     * wall-clock boundary and therefore collide. EVERY_X_MIN and HOURLY are measured
+     * from the previous run, so they are already staggered and shifting them would
+     * distort the interval the user asked for.
+     */
+    Instant nextRunWithJitter(Schedule schedule, Instant from) {
+        Instant base = computeNextRun(schedule, from);
+        int window = properties.getJitterSeconds();
+        if (window <= 0 || schedule.getId() == null) return base;
+        Schedule.FrequencyType type = schedule.getFrequencyType();
+        if (type != Schedule.FrequencyType.DAILY && type != Schedule.FrequencyType.WEEKLY
+                && type != Schedule.FrequencyType.CRON) {
+            return base;
+        }
+        return base.plusSeconds(Math.floorMod(schedule.getId() * 2654435761L, window));
     }
 
     /**

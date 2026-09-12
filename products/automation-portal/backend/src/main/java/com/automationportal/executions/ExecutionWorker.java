@@ -95,16 +95,10 @@ public class ExecutionWorker {
             return;
         }
 
-        // This used to be "if ANY execution anywhere is RUNNING, submit nothing" — a
-        // platform-wide, one-execution-at-a-time gate that blocked every other project behind
-        // whichever one happened to be running, regardless of project. That's the actual root
-        // cause of "only one execution at a time" (this check runs *before* anything even
-        // reaches the Execution Manager's own, already-project-aware dispatch queue). Same fix
-        // shape as QueueProcessor's dispatchKey guard: two different projects' framework
-        // directories can't collide, so they may submit and run concurrently; two runs sharing
-        // the same directory (same project, or two legacy jobs on the same shared checkout)
-        // still can't, so they still serialize — correctly, not as a side effect of a blanket
-        // gate.
+        // Keyed per framework directory, not platform-wide. A blanket "any execution is RUNNING"
+        // gate here blocked every project behind whichever one happened to be running, before
+        // anything even reached the Execution Manager's own project-aware queue. Runs sharing a
+        // directory still serialize; different projects no longer do.
         Set<String> busyKeys = executionRepository.findByStatus(ExecutionStatus.RUNNING).stream()
                 .map(this::resolveDispatchKey)
                 .collect(Collectors.toSet());
@@ -120,13 +114,9 @@ public class ExecutionWorker {
         }
     }
 
-    /**
-     * Mirrors the resolution processExecution() does for real dispatch, kept minimal (no side
-     * effects, no disabled-engine check) since this only needs a stable identity for the
-     * pollQueue() concurrency guard above. Same key shape as QueueProcessor's own guard: the
-     * engine's frameworkPath when one is linked, else the shared checkout identity for today's
-     * legacy (no Test Engine) modules.
-     */
+    /** Mirrors processExecution()'s resolution but side-effect free — this only needs a stable
+     *  identity for the concurrency guard above: the engine's frameworkPath when one is linked,
+     *  else the shared checkout identity for legacy modules. */
     private String resolveDispatchKey(Execution execution) {
         if (execution.getExecutionType() == ExecutionType.MODULE && execution.getModuleCode() != null) {
             Optional<ModuleEntity> moduleOpt = moduleRepository
@@ -291,15 +281,9 @@ public class ExecutionWorker {
         }
     }
 
-    /**
-     * Resolves the effective config for this run into a flat JSON object to hand off to the
-     * Execution Manager / Framework Runner, which inject each entry into the Maven run as a -D
-     * system property (or process env for Playwright). Merge order (later wins on key
-     * conflict): environment's base config -> module_environments override -> execution params
-     * -> auto-added environment.code/name/module.code/environment.base_url. `module` is null
-     * for ALL_MODULES/XML_SUITE executions (no single module in play), in which case this is
-     * environment-only, exactly as before Phase 2.
-     */
+    /** Flattens the effective run config for the runner, which injects each entry as a Maven -D
+     *  property (or process env for Playwright). Later wins: environment base -> module override
+     *  -> execution params -> auto-added codes/base_url. Null module means environment-only. */
     private String resolveEnvConfigJson(Long environmentId, ModuleEntity module) {
         ObjectNode node = objectMapper.createObjectNode();
         if (environmentId == null) {
@@ -383,10 +367,8 @@ public class ExecutionWorker {
             Files.createDirectories(artifactBaseDir.resolve("screenshots"));
             Files.createDirectories(artifactBaseDir.resolve("logs"));
 
-            // MPHIDB's listener pushes SUITE_COMPLETED (which triggers this method) from its
-            // afterSuite/onFinish hook, but TestNG's native XMLReporter writes testng-results.xml
-            // as one of the very last steps of its own shutdown sequence — slightly after that
-            // hook runs. Give it a short bounded window to land before copying artifacts.
+            // SUITE_COMPLETED fires from afterSuite, but TestNG's XMLReporter writes
+            // testng-results.xml later in its own shutdown. Wait a bounded window for it.
             waitForFile(new File(repoPath, properties.getResultFiles().getOrDefault("testng-results", "")), 10, 500);
 
             // Copy files
@@ -420,12 +402,9 @@ public class ExecutionWorker {
         }
     }
 
-    /**
-     * Playwright's counterpart to copyExecutionArtifacts() — no TestNG XML/Extent report to
-     * parse, just walks whatever screenshots/videos/traces the run actually produced under
-     * test-results/ and records them the same way (reusing the same saveArtifactRecord()
-     * helper), so the Artifacts tab/API needs no per-framework branching to consume either.
-     */
+    /** Playwright's counterpart to copyExecutionArtifacts(): no TestNG XML to parse, just walks
+     *  test-results/ and records through the same saveArtifactRecord(), so the Artifacts tab
+     *  needs no per-framework branching. */
     public void copyPlaywrightArtifacts(Execution execution) {
         try {
             String playwrightPath = resolvePlaywrightPath(execution);
@@ -479,12 +458,9 @@ public class ExecutionWorker {
         }
     }
 
-    /**
-     * Mirrors the dispatch-time resolution in processExecution() (engine.frameworkPath under
-     * PROJECT_FRAMEWORKS_ROOT beats the one static, shared checkout) so artifact copy reads from
-     * the same directory the run actually executed in — otherwise a project-specific run would
-     * dispatch correctly but silently pull artifacts from the wrong (shared) checkout instead.
-     */
+    /** Mirrors processExecution()'s dispatch-time resolution so artifact copy reads the directory
+     *  the run actually executed in — otherwise a project-specific run dispatches correctly but
+     *  silently pulls artifacts from the shared checkout. */
     private String resolvePlaywrightPath(Execution execution) {
         if (execution.getTestEngineId() != null) {
             TestEngine engine = testEngineRepository.findById(execution.getTestEngineId()).orElse(null);
@@ -510,12 +486,9 @@ public class ExecutionWorker {
         }
     }
 
-    /**
-     * The live event stream (ExecutionEventService) creates/updates ExecutionTestCase rows in
-     * real time, but doesn't carry parameters, groups/tags, or per-step logs. testng-results.xml
-     * is the structured source of truth for that extra detail, so re-parse it once the run
-     * finishes and merge the gaps in rather than duplicating rows the live pipeline already made.
-     */
+    /** The live event stream creates test-case rows but carries no parameters, tags or per-step
+     *  logs. testng-results.xml is the source of truth for those, so merge the gaps in after the
+     *  run rather than duplicating rows the live pipeline already made. */
     private void mergeTestNgXmlResults(Execution execution, Path artifactBaseDir, String artifactsRoot) {
         try {
             File resultsXml = artifactBaseDir.resolve("xml/testng-results.xml").toFile();

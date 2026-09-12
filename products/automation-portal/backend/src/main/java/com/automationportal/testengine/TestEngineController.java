@@ -1,10 +1,10 @@
 package com.automationportal.testengine;
 
-import com.automationportal.auth.AuthenticatedUserService;
+import com.automationportal.security.CurrentUserService;
 import com.automationportal.common.ApiResponse;
 import com.automationportal.common.EntityIdGeneratorService;
 import com.automationportal.config.PortalAutomationProperties;
-import com.automationportal.workspace.CurrentProjectService;
+import com.automationportal.security.CurrentProjectService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -28,7 +28,7 @@ public class TestEngineController {
     private final TestEngineRepository repository;
     private final TestEngineCredentialService credentialService;
     private final CurrentProjectService currentProjectService;
-    private final AuthenticatedUserService authenticatedUserService;
+    private final CurrentUserService currentUserService;
     private final EntityIdGeneratorService entityIdGeneratorService;
     private final StarterKitService starterKitService;
     private final PortalAutomationProperties automationProperties;
@@ -36,14 +36,14 @@ public class TestEngineController {
     public TestEngineController(TestEngineRepository repository,
                                 TestEngineCredentialService credentialService,
                                 CurrentProjectService currentProjectService,
-                                AuthenticatedUserService authenticatedUserService,
+                                CurrentUserService currentUserService,
                                 EntityIdGeneratorService entityIdGeneratorService,
                                 StarterKitService starterKitService,
                                 PortalAutomationProperties automationProperties) {
         this.repository = repository;
         this.credentialService = credentialService;
         this.currentProjectService = currentProjectService;
-        this.authenticatedUserService = authenticatedUserService;
+        this.currentUserService = currentUserService;
         this.entityIdGeneratorService = entityIdGeneratorService;
         this.starterKitService = starterKitService;
         this.automationProperties = automationProperties;
@@ -91,7 +91,7 @@ public class TestEngineController {
         engine.setEndpoint(body.endpoint());
         engine.setFrameworkPath(validateFrameworkPath(body.frameworkPath()));
         engine.setReportPath(body.reportPath());
-        engine.setCreatedByUserId(authenticatedUserService.currentUser().getId());
+        engine.setCreatedByUserId(currentUserService.currentUser().id());
         repository.save(engine);
 
         TestEngineCredentialService.IssuedCredential issued = credentialService.issue(engine.getId());

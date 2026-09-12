@@ -3,7 +3,7 @@ package com.automationportal.reports;
 import com.automationportal.common.ApiResponse;
 import com.automationportal.config.PortalAutomationProperties;
 import com.automationportal.executions.*;
-import com.automationportal.workspace.CurrentProjectService;
+import com.automationportal.security.CurrentProjectService;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;

@@ -49,6 +49,16 @@ perf:
   scheduler:
     poll-interval-ms: 30000   # how often scheduler thread wakes up
     timezone: ${SCHEDULER_TZ:Asia/Kolkata}
+    # Round-robin the claim batch across projects so one project with a huge backlog
+    # can't fill every batch and starve the rest. No effect on a single-project setup.
+    fair-claim-enabled: ${PERF_SCHEDULER_FAIR_CLAIM:true}
+    claim-batch-size: ${PERF_SCHEDULER_CLAIM_BATCH_SIZE:20}
+    claim-candidate-multiplier: ${PERF_SCHEDULER_CLAIM_CANDIDATE_MULTIPLIER:5}
+    # Spread schedules sharing a cron boundary over this many seconds. 0 = off, keeping
+    # today's exact firing times.
+    jitter-seconds: ${PERF_SCHEDULER_JITTER_SECONDS:0}
+    # Hard cap on schedules per project (paused ones counted too). 0 disables the cap.
+    max-schedules-per-project: ${PERF_SCHEDULER_MAX_SCHEDULES_PER_PROJECT:100}
   queue:
     poll-interval-ms: 5000                            # PerfJobWorker drain frequency (ms)
     max-concurrent-runs: ${PERF_QUEUE_MAX_CONCURRENT:3}  # hard cap on simultaneous k6 processes

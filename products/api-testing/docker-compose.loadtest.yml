@@ -31,7 +31,7 @@ services:
       FORM_DATA_FILE_STORE_DIR: /app/form-data-files
       APITESTING_ENCRYPTION_KEY: ${APITESTING_ENCRYPTION_KEY:?APITESTING_ENCRYPTION_KEY must be set in .env}
       PORTAL_JWT_SECRET: ${PORTAL_JWT_SECRET:?PORTAL_JWT_SECRET must be set in .env}
-      INTERNAL_MAIL_URL: http://automation-portal-backend:8080/api/internal/reports/mail
+      INTERNAL_MAIL_URL: http://testrix-platform-backend:8080/api/internal/reports/mail
       PORTAL_EVENTS_API_KEY: ${PORTAL_EVENTS_API_KEY:?PORTAL_EVENTS_API_KEY must be set in .env}
     volumes:
       - api_testing_history_bodies:/app/history-bodies
