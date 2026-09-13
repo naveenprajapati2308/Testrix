@@ -50,7 +50,6 @@ select {
   align-items: center;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--sidebar-edge);
-  margin-left: 20px;
 }
 
 .brand-logo {
@@ -67,6 +66,110 @@ select {
   padding: 3px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   margin-left: 0px;
+}
+
+/* Sidebar collapse/expand toggle button – sits in the brand header */
+.sidebar-toggle-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--sidebar-edge);
+  background: transparent;
+  color: var(--sidebar-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  margin-left: auto;
+  padding: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  background: var(--sidebar-item-hover-bg);
+  color: var(--sidebar-item-hover-text);
+  border-color: var(--sidebar-item-hover-text);
+}
+
+/* Collapsed submenu flyout popup */
+.nav-collapsed-flyout {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 0;
+  min-width: 180px;
+  background: var(--bg-surface, #1a1f2e);
+  border: 1px solid var(--sidebar-edge);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: flyoutIn 0.15s ease-out;
+}
+
+@keyframes flyoutIn {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.nav-collapsed-flyout-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sidebar-section, #637a95);
+  padding: 6px 10px 4px;
+}
+
+.nav-collapsed-flyout button {
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sidebar-item, #9ab);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.nav-collapsed-flyout button:hover {
+  background: var(--sidebar-item-hover-bg);
+  color: var(--sidebar-item-hover-text);
+}
+
+.nav-collapsed-flyout button.active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
+}
+
+/* Sidebar drag-to-resize handle */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 100;
+  transition: background 0.15s;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:active {
+  background: var(--sidebar-active-bg, rgba(96, 179, 224, 0.25));
 }
 
 .brand strong,

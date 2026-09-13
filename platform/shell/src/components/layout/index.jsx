@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Bell, BookOpen, Building2, Camera,
   CalendarClock,
@@ -8,7 +8,7 @@ import {
   ChevronRight, Crown, Database,
   FileText,
   FolderTree,
-  Gauge, GitCompare, Globe2, History, LayoutDashboard, LogOut, Monitor, Moon, Package, Play, Settings, Sparkles, Sun, TerminalSquare, UserCircle,
+  Gauge, GitCompare, Globe2, History, LayoutDashboard, LogOut, Menu, Monitor, Moon, Package, Play, Settings, Sparkles, Sun, TerminalSquare, UserCircle,
   Users,
   Workflow
 } from 'lucide-react';
@@ -66,12 +66,21 @@ export function Sidebar({
     }
   }
 
+  // ── Collapsed submenu hover popup ───────────────────────────────────────
+  const [hoveredGroup, setHoveredGroup] = useState(null);
+  const hoverTimeoutRef = useRef(null);
+  const openHover = (key) => { clearTimeout(hoverTimeoutRef.current); setHoveredGroup(key); };
+  const closeHover = () => { hoverTimeoutRef.current = setTimeout(() => setHoveredGroup(null), 150); };
+
+  const COLLAPSED_W = 80;
+  const EXPANDED_W = 280;
+
   return (
     <aside
       className="sidebar"
       style={{
-        width: isCollapsed ? '70px' : '280px',
-        minWidth: isCollapsed ? '70px' : '280px',
+        width: isCollapsed ? `${COLLAPSED_W}px` : `${EXPANDED_W}px`,
+        minWidth: isCollapsed ? `${COLLAPSED_W}px` : `${EXPANDED_W}px`,
         padding: isCollapsed ? '12px 8px' : '22px',
         transition: 'all 0.2s ease-in-out'
       }}
@@ -79,11 +88,19 @@ export function Sidebar({
       <div className="brand" style={{ paddingBottom: isCollapsed ? '12px' : '24px', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
         <img src={testrixLogo} alt="TESTRIX" className="brand-logo sidebar-logo" style={{ width: 36, height: 36, flexShrink: 0 }} />
         {!isCollapsed && (
-          <div style={{ animation: 'fadeIn 0.2s' }}>
+          <div style={{ animation: 'fadeIn 0.2s', flex: 1 }}>
             <strong>TESTRIX</strong>
             <span>Unified Testing Platform</span>
           </div>
         )}
+        <button
+          onClick={onToggle}
+          className="sidebar-toggle-btn"
+          title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          aria-label={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+        >
+          {isCollapsed ? <Menu size={14} /> : <ChevronLeft size={16} />}
+        </button>
       </div>
 
       <nav style={{ paddingRight: 0, flex: '0 1 auto' }}>
@@ -106,6 +123,8 @@ export function Sidebar({
             borderRadius: '8px'
           };
           const children = item.children;
+
+          /* ── Expanded: normal accordion ── */
           if (children && !isCollapsed) {
             const isExpanded = !!expandedKeys[item.key];
             return (
@@ -138,19 +157,50 @@ export function Sidebar({
               </div>
             );
           }
-          if (item.children && isCollapsed) {
+
+          /* ── Collapsed + has children: icon-only with hover flyout popup ── */
+          if (children && isCollapsed) {
+            const visibleChildren = children.filter(
+              (child) => !child.projectAdminOnly || project?.roles?.includes('PROJECT_ADMIN')
+            );
             return (
-              <button
+              <div
                 key={item.key}
-                className={isActive ? 'active' : ''}
-                onClick={() => onNavigate(item.key)}
-                title={item.label}
-                style={commonStyle}
+                className="nav-collapsed-group"
+                onMouseEnter={() => openHover(item.key)}
+                onMouseLeave={closeHover}
+                style={{ position: 'relative' }}
               >
-                <Icon size={18} style={{ flexShrink: 0 }} />
-              </button>
+                <button
+                  className={isActive ? 'active' : ''}
+                  onClick={() => onNavigate(item.key)}
+                  title={item.label}
+                  style={commonStyle}
+                >
+                  <Icon size={18} style={{ flexShrink: 0 }} />
+                </button>
+                {hoveredGroup === item.key && visibleChildren.length > 0 && (
+                  <div
+                    className="nav-collapsed-flyout"
+                    onMouseEnter={() => openHover(item.key)}
+                    onMouseLeave={closeHover}
+                  >
+                    <div className="nav-collapsed-flyout-title">{item.label}</div>
+                    {visibleChildren.map((child) => (
+                      <button
+                        key={child.key}
+                        className={activeChildKey === child.key ? 'active' : ''}
+                        onClick={() => onNavigateChild(item.key, child.key)}
+                      >
+                        {child.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           }
+
           if (item.href) {
             return (
               <a
@@ -194,25 +244,6 @@ export function Sidebar({
       </nav>
 
       <div style={{ marginTop: 'auto' }}>
-        <button
-          onClick={onToggle}
-          className="secondary-action"
-          style={{
-            minHeight: '32px',
-            height: '32px',
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '8px 0',
-            border: '1px solid var(--sidebar-edge)',
-            background: 'var(--sidebar-item-hover-bg)',
-            color: 'var(--sidebar-muted)'
-          }}
-          title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-        >
-          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
 
         <div className="sidebar-footer">
           <button
@@ -247,16 +278,58 @@ export function Sidebar({
   );
 }
 
-export function PortalLayout({ sidebar, topbar, children, shellClassName = '', mainClassName = '', isCollapsed }) {
+export function PortalLayout({ sidebar, topbar, children, shellClassName = '', mainClassName = '', isCollapsed, sidebarWidth }) {
+  const COLLAPSED_W = 80;
+  const EXPANDED_W = 280;
+  const effectiveWidth = sidebarWidth || (isCollapsed ? COLLAPSED_W : EXPANDED_W);
+
+  // ── Drag-to-resize state ────────────────────────────────────────────────
+  const [dragWidth, setDragWidth] = useState(null);
+  const draggingRef = useRef(false);
+
+  const onResizeStart = useCallback((e) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    const startX = e.clientX;
+    const startW = effectiveWidth;
+    const onMove = (ev) => {
+      if (!draggingRef.current) return;
+      const newW = Math.max(COLLAPSED_W, Math.min(480, startW + (ev.clientX - startX)));
+      setDragWidth(newW);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      setDragWidth(null);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [effectiveWidth]);
+
+  const actualWidth = dragWidth || effectiveWidth;
+
   return (
     <div
       className={`shell portal-layout ${shellClassName}`.trim()}
       style={{
-        gridTemplateColumns: isCollapsed ? '70px 1fr' : '280px 1fr',
-        transition: 'grid-template-columns 0.2s ease-in-out'
+        gridTemplateColumns: `${actualWidth}px 1fr`,
+        transition: dragWidth ? 'none' : 'grid-template-columns 0.2s ease-in-out'
       }}
     >
-      {sidebar}
+      <div style={{ position: 'relative', width: actualWidth, transition: dragWidth ? 'none' : 'width 0.2s ease-in-out' }}>
+        {sidebar}
+        {/* Drag-to-resize handle on the right edge */}
+        <div
+          className="sidebar-resize-handle"
+          onMouseDown={onResizeStart}
+          title="Drag to resize sidebar"
+        />
+      </div>
       <main className={`layout-main ${mainClassName}`.trim()}>
         {topbar}
         <div className="layout-content">
