@@ -176,7 +176,7 @@ export default function RequestWorkspace() {
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col h-full overflow-auto">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-surface)]">
         <Link to={`/tester/${collectionId}`} className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] shrink-0">
@@ -226,7 +226,7 @@ export default function RequestWorkspace() {
       </div>
 
       <div className="flex flex-col">
-        <div className="h-[130px] shrink-0 flex flex-col border-b border-[var(--border)] min-h-0">
+        <div className="flex flex-col border-b border-[var(--border)]">
           <div className="flex gap-1 px-4 pt-2 border-b border-[var(--border)]">
             {BUILDER_SUBTABS.map((t) => (
               <button key={t} onClick={() => setBuilderSubTab(t)}
@@ -235,11 +235,11 @@ export default function RequestWorkspace() {
               </button>
             ))}
           </div>
-          <div className="flex-1 overflow-auto p-4 min-h-0">
+          <div className="p-4">
             {builderSubTab === 'Parameters' && <KeyValueEditor items={queryParams} onChange={setQueryParams} keyPlaceholder="Parameter" showRequired />}
             {builderSubTab === 'Headers' && <KeyValueEditor items={headers} onChange={setHeaders} keyPlaceholder="Header" showRequired />}
             {builderSubTab === 'Body' && (
-              <div className="h-full flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-1">
                   {BODY_TYPES.map((bt) => (
                     <button key={bt} onClick={() => setBodyType(bt)}
@@ -256,12 +256,10 @@ export default function RequestWorkspace() {
                   )}
                 </div>
                 {bodyType === 'FORM_DATA' && (
-                  <div className="flex-1 min-h-0 overflow-auto">
-                    <FormDataEditor items={formData} onChange={setFormData} />
-                  </div>
+                  <FormDataEditor items={formData} onChange={setFormData} />
                 )}
                 {bodyType !== 'NONE' && bodyType !== 'FORM_DATA' && (
-                  <div className="flex-1 min-h-0 border border-[var(--border)] rounded-md overflow-hidden">
+                  <div className="h-32 border border-[var(--border)] rounded overflow-hidden">
                     <ThemedEditor height="100%"
                       language={bodyType === 'JSON' ? 'json' : bodyType === 'XML' || bodyType === 'HTML' ? 'html' : 'plaintext'}
                       value={body} onChange={(v) => setBody(v ?? '')}
@@ -269,8 +267,8 @@ export default function RequestWorkspace() {
                   </div>
                 )}
                 {bodyType === 'JSON' && (
-                  <div className="shrink-0 pt-2">
-                    <div className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Required Payload Fields</div>
+                  <div className="mt-2">
+                    <div className="text-xs text-[var(--text-muted)] mb-1.5">Required Payload Fields</div>
                     <KeyValueEditor items={requiredPayloadFields} onChange={setRequiredPayloadFields}
                       keyPlaceholder="JSON field name" showRequired />
                   </div>

@@ -198,7 +198,23 @@ export default function App() {
   const [recentActivity, setRecentActivity] = useState(null);
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
   const [range, setRange] = useDateRange(DATE_RANGE_SCOPES.GLOBAL, '7d');
-  const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('testrix_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('testrix_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const initialRoute = parseHashRoute();
   const [page, setPage] = useState(initialRoute.page);
@@ -941,6 +957,7 @@ export default function App() {
     <>
       <PortalLayout
         isCollapsed={superAdmin ? false : isSidebarCollapsed}
+        onToggle={toggleSidebar}
         shellClassName={superAdmin ? 'admin-shell' : ''}
         mainClassName={superAdmin ? 'admin-main' : ''}
         sidebar={superAdmin ? (
@@ -972,7 +989,7 @@ export default function App() {
               if (parentKey === 'perf') setPerfPageAndHash(childKey);
             }}
             isCollapsed={isSidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((c) => !c)}
+            onToggle={toggleSidebar}
             onOpenAiAssistant={goAiAssistant}
           />
         )}

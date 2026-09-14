@@ -66,54 +66,99 @@ export function Sidebar({
     }
   }
 
-  // ── Collapsed submenu hover popup ───────────────────────────────────────
-  const [hoveredGroup, setHoveredGroup] = useState(null);
-  const hoverTimeoutRef = useRef(null);
-  const openHover = (key) => { clearTimeout(hoverTimeoutRef.current); setHoveredGroup(key); };
-  const closeHover = () => { hoverTimeoutRef.current = setTimeout(() => setHoveredGroup(null), 150); };
+  // ── Collapsed mode: hover tooltip and click submenu dropdown state ────────
+  const [hoveredItem, setHoveredItem] = useState(null); // { key, label, rect }
+  const [openSubmenu, setOpenSubmenu] = useState(null); // { key, label, children, rect }
 
-  const COLLAPSED_W = 80;
-  const EXPANDED_W = 280;
+  useEffect(() => {
+    if (!openSubmenu) return;
+    const handleClickOutside = (e) => {
+      if (
+        !e.target.closest('.sidebar-floating-flyout') &&
+        !e.target.closest('.nav-collapsed-item-btn')
+      ) {
+        setOpenSubmenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openSubmenu]);
+
+  // Close popup if sidebar gets expanded
+  useEffect(() => {
+    if (!isCollapsed) {
+      setOpenSubmenu(null);
+      setHoveredItem(null);
+    }
+  }, [isCollapsed]);
 
   return (
     <aside
       className="sidebar"
       style={{
-        width: isCollapsed ? `${COLLAPSED_W}px` : `${EXPANDED_W}px`,
-        minWidth: isCollapsed ? `${COLLAPSED_W}px` : `${EXPANDED_W}px`,
-        padding: isCollapsed ? '12px 8px' : '22px',
-        transition: 'all 0.2s ease-in-out'
+        width: '100%',
+        padding: isCollapsed ? '12px 8px' : '20px 16px',
+        boxSizing: 'border-box'
       }}
     >
-      <div className="brand" style={{ paddingBottom: isCollapsed ? '12px' : '24px', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
-        <img src={testrixLogo} alt="TESTRIX" className="brand-logo sidebar-logo" style={{ width: 36, height: 36, flexShrink: 0 }} />
-        {!isCollapsed && (
-          <div style={{ animation: 'fadeIn 0.2s', flex: 1 }}>
-            <strong>TESTRIX</strong>
-            <span>Unified Testing Platform</span>
-          </div>
+      <div
+        className="brand"
+        style={{
+          padding: isCollapsed ? '8px 0 14px' : '0 0 20px',
+          flexDirection: isCollapsed ? 'column' : 'row',
+          alignItems: 'center',
+          justifyContent: isCollapsed ? 'center' : 'space-between',
+          gap: isCollapsed ? '8px' : '10px',
+          borderBottom: '1px solid var(--sidebar-edge)',
+          marginBottom: '8px',
+          width: '100%'
+        }}
+      >
+        {isCollapsed ? (
+          <>
+            <img
+              src={testrixLogo}
+              alt="TESTRIX"
+              className="brand-logo sidebar-logo"
+              style={{ width: 32, height: 32, margin: 0 }}
+            />
+            <button
+              onClick={onToggle}
+              className="sidebar-toggle-btn"
+              title="Expand Sidebar"
+              aria-label="Expand Sidebar"
+            >
+              <Menu size={18} />
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+              <img
+                src={testrixLogo}
+                alt="TESTRIX"
+                className="brand-logo sidebar-logo"
+                style={{ width: 34, height: 34, flexShrink: 0 }}
+              />
+              <div style={{ animation: 'fadeIn 0.2s', minWidth: 0, overflow: 'hidden' }}>
+                <strong style={{ fontSize: '15px', letterSpacing: '0.04em' }}>TESTRIX</strong>
+                <span style={{ fontSize: '11px', color: 'var(--sidebar-muted)' }}>Unified Testing Platform</span>
+              </div>
+            </div>
+            <button
+              onClick={onToggle}
+              className="sidebar-toggle-btn"
+              title="Collapse Sidebar"
+              aria-label="Collapse Sidebar"
+            >
+              <Menu size={18} />
+            </button>
+          </>
         )}
-        <button
-          onClick={onToggle}
-          className="sidebar-toggle-btn"
-          title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-          aria-label={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-        >
-          {isCollapsed ? <Menu size={14} /> : <ChevronLeft size={16} />}
-        </button>
       </div>
 
-      <nav style={{ paddingRight: 0, flex: '0 1 auto' }}>
-        <div
-          className="nav-section-label"
-          style={{
-            textAlign: isCollapsed ? 'center' : 'left',
-            fontSize: isCollapsed ? '9px' : '10px',
-            padding: isCollapsed ? '10px 0 4px' : '10px 12px 4px'
-          }}
-        >
-          {isCollapsed ? 'NAV' : 'Navigation'}
-        </div>
+      <nav style={{ paddingRight: 0, flex: '1 1 auto', overflowY: 'auto', overflowX: 'hidden' }}>
+
         {navItems.map((item) => {
           const Icon = NAV_ICON_MAP[item.icon] || LayoutDashboard;
           const isActive = active === item.key;
@@ -122,10 +167,13 @@ export function Sidebar({
             padding: isCollapsed ? '0' : '0 12px',
             borderRadius: '8px'
           };
-          const children = item.children;
+          const children = item.children
+            ? item.children.filter((child) => !child.projectAdminOnly || project?.roles?.includes('PROJECT_ADMIN'))
+            : null;
+          const hasChildren = children && children.length > 0;
 
-          /* ── Expanded: normal accordion ── */
-          if (children && !isCollapsed) {
+          /* ── Expanded: accordion ── */
+          if (hasChildren && !isCollapsed) {
             const isExpanded = !!expandedKeys[item.key];
             return (
               <div className="nav-group" key={item.key}>
@@ -141,52 +189,7 @@ export function Sidebar({
                 </button>
                 {isExpanded && (
                   <div className="nav-submenu">
-                    {children
-                      .filter((child) => !child.projectAdminOnly || project?.roles?.includes('PROJECT_ADMIN'))
-                      .map((child) => (
-                        <button
-                          key={child.key}
-                          className={activeChildKey === child.key ? 'active' : ''}
-                          onClick={() => onNavigateChild(item.key, child.key)}
-                        >
-                          {child.label}
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            );
-          }
-
-          /* ── Collapsed + has children: icon-only with hover flyout popup ── */
-          if (children && isCollapsed) {
-            const visibleChildren = children.filter(
-              (child) => !child.projectAdminOnly || project?.roles?.includes('PROJECT_ADMIN')
-            );
-            return (
-              <div
-                key={item.key}
-                className="nav-collapsed-group"
-                onMouseEnter={() => openHover(item.key)}
-                onMouseLeave={closeHover}
-                style={{ position: 'relative' }}
-              >
-                <button
-                  className={isActive ? 'active' : ''}
-                  onClick={() => onNavigate(item.key)}
-                  title={item.label}
-                  style={commonStyle}
-                >
-                  <Icon size={18} style={{ flexShrink: 0 }} />
-                </button>
-                {hoveredGroup === item.key && visibleChildren.length > 0 && (
-                  <div
-                    className="nav-collapsed-flyout"
-                    onMouseEnter={() => openHover(item.key)}
-                    onMouseLeave={closeHover}
-                  >
-                    <div className="nav-collapsed-flyout-title">{item.label}</div>
-                    {visibleChildren.map((child) => (
+                    {children.map((child) => (
                       <button
                         key={child.key}
                         className={activeChildKey === child.key ? 'active' : ''}
@@ -201,6 +204,89 @@ export function Sidebar({
             );
           }
 
+          /* ── Collapsed: with children (click opens submenu dropdown, hover shows tooltip) ── */
+          if (hasChildren && isCollapsed) {
+            const isDropdownOpen = openSubmenu?.key === item.key;
+            return (
+              <button
+                key={item.key}
+                className={`nav-collapsed-item-btn ${isActive || isDropdownOpen ? 'active' : ''}`}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHoveredItem(null);
+                  setOpenSubmenu((prev) =>
+                    prev?.key === item.key ? null : { key: item.key, label: item.label, children, rect }
+                  );
+                }}
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHoveredItem({ key: item.key, label: item.label, rect });
+                }}
+                onMouseLeave={() => setHoveredItem(null)}
+                style={commonStyle}
+              >
+                <Icon size={18} style={{ flexShrink: 0 }} />
+              </button>
+            );
+          }
+
+          /* ── Collapsed: direct item without children (hover shows tooltip, click navigates) ── */
+          if (isCollapsed) {
+            if (item.disabled) {
+              return (
+                <button
+                  key={item.key}
+                  disabled
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoveredItem({ key: item.key, label: `${item.label} (Coming Soon)`, rect });
+                  }}
+                  onMouseLeave={() => setHoveredItem(null)}
+                  style={{ ...commonStyle, opacity: 0.45, cursor: 'default' }}
+                >
+                  <Icon size={18} style={{ flexShrink: 0 }} />
+                </button>
+              );
+            }
+            if (item.href) {
+              return (
+                <a
+                  key={item.key}
+                  href={item.href}
+                  className={isActive ? 'active' : ''}
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoveredItem({ key: item.key, label: item.label, rect });
+                  }}
+                  onMouseLeave={() => setHoveredItem(null)}
+                  style={{ ...commonStyle, textDecoration: 'none' }}
+                >
+                  <Icon size={18} style={{ flexShrink: 0 }} />
+                </a>
+              );
+            }
+            return (
+              <button
+                key={item.key}
+                className={isActive ? 'active' : ''}
+                onClick={() => {
+                  setOpenSubmenu(null);
+                  setHoveredItem(null);
+                  onNavigate(item.key);
+                }}
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHoveredItem({ key: item.key, label: item.label, rect });
+                }}
+                onMouseLeave={() => setHoveredItem(null)}
+                style={commonStyle}
+              >
+                <Icon size={18} style={{ flexShrink: 0 }} />
+              </button>
+            );
+          }
+
+          /* ── Expanded: regular items without children ── */
           if (item.href) {
             return (
               <a
@@ -211,7 +297,7 @@ export function Sidebar({
                 style={{ ...commonStyle, textDecoration: 'none' }}
               >
                 <Icon size={18} style={{ flexShrink: 0 }} />
-                {!isCollapsed && <span style={{ animation: 'fadeIn 0.2s' }}>{item.label}</span>}
+                <span style={{ animation: 'fadeIn 0.2s' }}>{item.label}</span>
               </a>
             );
           }
@@ -224,7 +310,7 @@ export function Sidebar({
                 style={{ ...commonStyle, opacity: 0.45, cursor: 'default' }}
               >
                 <Icon size={18} style={{ flexShrink: 0 }} />
-                {!isCollapsed && <span style={{ animation: 'fadeIn 0.2s' }}>{item.label}</span>}
+                <span style={{ animation: 'fadeIn 0.2s' }}>{item.label}</span>
               </button>
             );
           }
@@ -237,18 +323,25 @@ export function Sidebar({
               style={commonStyle}
             >
               <Icon size={18} style={{ flexShrink: 0 }} />
-              {!isCollapsed && <span style={{ animation: 'fadeIn 0.2s' }}>{item.label}</span>}
+              <span style={{ animation: 'fadeIn 0.2s' }}>{item.label}</span>
             </button>
           );
         })}
       </nav>
 
       <div style={{ marginTop: 'auto' }}>
-
         <div className="sidebar-footer">
           <button
-            onClick={onOpenAiAssistant}
-            title="AI Assistant"
+            onClick={() => {
+              setOpenSubmenu(null);
+              setHoveredItem(null);
+              onOpenAiAssistant();
+            }}
+            onMouseEnter={isCollapsed ? (e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setHoveredItem({ key: 'ai-assistant', label: 'AI Assistant', rect });
+            } : undefined}
+            onMouseLeave={isCollapsed ? () => setHoveredItem(null) : undefined}
             className={`ai-chat-btn ${active === 'ai-assistant' ? 'active' : ''}`}
             style={{ justifyContent: isCollapsed ? 'center' : 'flex-start', padding: isCollapsed ? '0' : '0 12px' }}
           >
@@ -256,8 +349,16 @@ export function Sidebar({
             {!isCollapsed && <span style={{ animation: 'fadeIn 0.2s' }}>AI Assistant</span>}
           </button>
           <button
-            onClick={logout}
-            title="Logout"
+            onClick={() => {
+              setOpenSubmenu(null);
+              setHoveredItem(null);
+              logout();
+            }}
+            onMouseEnter={isCollapsed ? (e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setHoveredItem({ key: 'logout', label: 'Logout', rect });
+            } : undefined}
+            onMouseLeave={isCollapsed ? () => setHoveredItem(null) : undefined}
             className="logout-btn"
             style={{ justifyContent: isCollapsed ? 'center' : 'flex-start', padding: isCollapsed ? '0' : '0 12px' }}
           >
@@ -267,6 +368,53 @@ export function Sidebar({
           {!isCollapsed && <p style={{ animation: 'fadeIn 0.2s', textAlign: 'center' }}>All right reserved TESTRIX 2026</p>}
         </div>
       </div>
+
+      {/* ── Hover Tooltip for Collapsed Mode (hidden if dropdown is open for this item) ── */}
+      {isCollapsed && hoveredItem && (!openSubmenu || openSubmenu.key !== hoveredItem.key) && (
+        <div
+          className="nav-collapsed-tooltip"
+          style={{
+            position: 'fixed',
+            left: `${hoveredItem.rect.right + 10}px`,
+            top: `${hoveredItem.rect.top + hoveredItem.rect.height / 2}px`,
+            transform: 'translateY(-50%)',
+            zIndex: 999999
+          }}
+        >
+          {hoveredItem.label}
+        </div>
+      )}
+
+      {/* ── Click Submenu Dropdown for Collapsed Mode ── */}
+      {isCollapsed && openSubmenu && openSubmenu.rect && (
+        <div
+          className="sidebar-floating-flyout"
+          style={{
+            position: 'fixed',
+            left: `${openSubmenu.rect.right + 10}px`,
+            top: `${Math.min(openSubmenu.rect.top, Math.max(10, window.innerHeight - 340))}px`,
+            zIndex: 999999
+          }}
+        >
+          <div className="nav-collapsed-flyout">
+            <div className="nav-collapsed-flyout-title">{openSubmenu.label}</div>
+            <div className="nav-collapsed-flyout-list">
+              {openSubmenu.children.map((child) => (
+                <button
+                  key={child.key}
+                  className={activeChildKey === child.key ? 'active' : ''}
+                  onClick={() => {
+                    onNavigateChild(openSubmenu.key, child.key);
+                    setOpenSubmenu(null);
+                  }}
+                >
+                  {child.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes fadeIn {
@@ -278,57 +426,30 @@ export function Sidebar({
   );
 }
 
-export function PortalLayout({ sidebar, topbar, children, shellClassName = '', mainClassName = '', isCollapsed, sidebarWidth }) {
-  const COLLAPSED_W = 80;
-  const EXPANDED_W = 280;
-  const effectiveWidth = sidebarWidth || (isCollapsed ? COLLAPSED_W : EXPANDED_W);
-
-  // ── Drag-to-resize state ────────────────────────────────────────────────
-  const [dragWidth, setDragWidth] = useState(null);
-  const draggingRef = useRef(false);
-
-  const onResizeStart = useCallback((e) => {
-    e.preventDefault();
-    draggingRef.current = true;
-    const startX = e.clientX;
-    const startW = effectiveWidth;
-    const onMove = (ev) => {
-      if (!draggingRef.current) return;
-      const newW = Math.max(COLLAPSED_W, Math.min(480, startW + (ev.clientX - startX)));
-      setDragWidth(newW);
-    };
-    const onUp = () => {
-      draggingRef.current = false;
-      setDragWidth(null);
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [effectiveWidth]);
-
-  const actualWidth = dragWidth || effectiveWidth;
+export function PortalLayout({ sidebar, topbar, children, shellClassName = '', mainClassName = '', isCollapsed }) {
+  const sidebarWidth = isCollapsed ? 72 : 280;
 
   return (
     <div
       className={`shell portal-layout ${shellClassName}`.trim()}
       style={{
-        gridTemplateColumns: `${actualWidth}px 1fr`,
-        transition: dragWidth ? 'none' : 'grid-template-columns 0.2s ease-in-out'
+        gridTemplateColumns: `${sidebarWidth}px 1fr`,
+        transition: 'grid-template-columns 0.2s ease-in-out'
       }}
     >
-      <div style={{ position: 'relative', width: actualWidth, transition: dragWidth ? 'none' : 'width 0.2s ease-in-out' }}>
+      <div
+        className="sidebar-wrapper"
+        style={{
+          width: `${sidebarWidth}px`,
+          height: '100vh',
+          maxHeight: '100vh',
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          transition: 'width 0.2s ease-in-out'
+        }}
+      >
         {sidebar}
-        {/* Drag-to-resize handle on the right edge */}
-        <div
-          className="sidebar-resize-handle"
-          onMouseDown={onResizeStart}
-          title="Drag to resize sidebar"
-        />
       </div>
       <main className={`layout-main ${mainClassName}`.trim()}>
         {topbar}
