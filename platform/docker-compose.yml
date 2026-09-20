@@ -67,6 +67,17 @@ services:
     networks:
       - testrix
 
+  testrix-landing:
+    build:
+      context: ./landing
+      dockerfile: Dockerfile
+    container_name: testrix-landing
+    restart: unless-stopped
+    ports:
+      - "5176:80"
+    networks:
+      - testrix
+
   testrix-gateway:
     build:
       context: ..
@@ -86,6 +97,8 @@ services:
       performance-testing-backend:
         condition: service_started
       genai-service:
+        condition: service_started
+      testrix-landing:
         condition: service_started
     ports:
       - "15000:80"
