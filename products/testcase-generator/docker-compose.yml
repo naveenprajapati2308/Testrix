@@ -1,0 +1,41 @@
+services:
+  testcase-generator-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: testcase-generator-backend
+    restart: unless-stopped
+    depends_on:
+      testrix-mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    environment:
+      TZ: ${SCHEDULER_TZ:-Asia/Kolkata}
+      DB_URL: jdbc:mysql://testrix-mysql:3306/testrix_platform?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
+      SRS_STORE_DIR: /app/srs-files
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY must be set in .env}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      GEMINI_CONCURRENCY: ${GEMINI_CONCURRENCY:-8}
+      PORTAL_JWT_SECRET: ${PORTAL_JWT_SECRET:?PORTAL_JWT_SECRET must be set in .env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+    volumes:
+      - testcase_generator_srs_files:/app/srs-files
+    ports:
+      - "8083:8080"
+    networks:
+      - testrix
+
+networks:
+  testrix:
+    name: testrix_network
+
+volumes:
+  testcase_generator_srs_files:
+    name: testcase_generator_srs_files

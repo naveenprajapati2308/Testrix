@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Native select arrows hug the right border regardless of padding — replace with a custom
+   chevron inset from the edge, applied to every dropdown. Matches the other products. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem !important;
+}
+
+/* AG Grid reads these at paint time, and each one points at a Testrix token that already
+   flips with [data-theme] — so the grid follows the shell's light/dark toggle with no second
+   theme object and no JS. Values are plain CSS variables, never passed through AG Grid's
+   own colour parsing, which cannot resolve var(). */
+.ag-theme-testrix {
+  --ag-background-color: var(--bg-surface);
+  --ag-foreground-color: var(--text-primary);
+  --ag-border-color: var(--border);
+  --ag-row-border-color: var(--border-soft);
+  --ag-header-background-color: var(--bg-surface-2);
+  --ag-header-foreground-color: var(--text-secondary);
+  --ag-row-hover-color: var(--bg-hover);
+  --ag-selected-row-background-color: var(--accent-bg-soft);
+  --ag-accent-color: var(--accent);
+  --ag-input-focus-border-color: var(--accent);
+  --ag-invalid-color: var(--danger-text);
+  --ag-chip-background-color: var(--bg-hover);
+  --ag-control-panel-background-color: var(--bg-surface-2);
+  --ag-font-family: var(--font-sans);
+  --ag-font-size: 13px;
+  --ag-border-radius: var(--radius-sm);
+  --ag-wrapper-border-radius: var(--radius-lg);
+}
+
+/* Rows carry multi-line steps and preconditions; without this the text is clipped to one line
+   and the grid becomes unreadable for exactly the content people need to review. */
+.ag-theme-testrix .ag-cell-wrap-text {
+  white-space: pre-wrap !important;
+  line-height: 1.45;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* An edited-but-unsaved cell, so it is obvious what will be written on Save. */
+.ag-theme-testrix .tc-cell-dirty {
+  background-color: var(--warning-bg-soft);
+  box-shadow: inset 2px 0 0 var(--warning-text);
+}

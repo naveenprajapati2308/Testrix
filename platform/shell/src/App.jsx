@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, CalendarCheck, CalendarClock, CheckCircle2, Clock,
-  Layers, ListTodo, Loader2, Play, Sparkles, Timer, TimerReset, TrendingUp, XCircle, Zap
+  Layers, ListChecks, ListTodo, Loader2, Play, Sparkles, Timer, TimerReset, TrendingUp, XCircle, Zap
 } from 'lucide-react';
 import { api, auth } from './api.js';
-import { ADMIN_WORKSPACE_NAV_FLAT, API_TESTING_NAV, AUTOMATION_NAV, PERFORMANCE_NAV, isSuperAdmin } from './constants.js';
+import { ADMIN_WORKSPACE_NAV_FLAT, API_TESTING_NAV, AUTOMATION_NAV, PERFORMANCE_NAV, TEST_CASE_GEN_NAV, isSuperAdmin } from './constants.js';
 import { PortalLayout, Sidebar, Topbar } from './components/layout/index.jsx';
 import { AdminSidebar, AdminTopbar, AdminContent, adminPageTitle } from './components/admin/AdminWorkspace.jsx';
 import { AutomationWorkspace } from './components/automation/AutomationWorkspace.jsx';
 import { ApiTestingWorkspace } from './components/apitesting/ApiTestingWorkspace.jsx';
 import { PerformanceWorkspace } from './components/performance/PerformanceWorkspace.jsx';
+import { TestGenWorkspace } from './components/testgen/TestGenWorkspace.jsx';
 import { Profile } from './components/profile/Profile.jsx';
 import { AuthPage } from './components/auth/AuthPage.jsx';
 import { ProjectUserManagement } from './components/team/ProjectUserManagement.jsx';
@@ -47,8 +48,9 @@ const ADMIN_PAGE_KEYS = new Set(ADMIN_WORKSPACE_NAV_FLAT.map((item) => item.key)
 const AUTOMATION_PAGE_KEYS = new Set(AUTOMATION_NAV.map((item) => item.key));
 const API_TESTING_PAGE_KEYS = new Set(API_TESTING_NAV.map((item) => item.key));
 const PERFORMANCE_PAGE_KEYS = new Set(PERFORMANCE_NAV.map((item) => item.key));
+const TEST_CASE_GEN_PAGE_KEYS = new Set(TEST_CASE_GEN_NAV.map((item) => item.key));
 
-const DEFAULT_ROUTE = { adminPage: 'admin-dashboard', automationPage: 'dashboard', apitestPage: 'dashboard', perfPage: 'dashboard' };
+const DEFAULT_ROUTE = { adminPage: 'admin-dashboard', automationPage: 'dashboard', apitestPage: 'dashboard', perfPage: 'dashboard', testgenPage: 'documents' };
 
 const parseHashRoute = () => {
   const [head, sub] = window.location.hash.replace(/^#\/?/, '').split('/');
@@ -63,6 +65,9 @@ const parseHashRoute = () => {
   }
   if (head === 'perf') {
     return { ...DEFAULT_ROUTE, page: 'perf', perfPage: PERFORMANCE_PAGE_KEYS.has(sub) ? sub : 'dashboard' };
+  }
+  if (head === 'testgen') {
+    return { ...DEFAULT_ROUTE, page: 'testgen', testgenPage: TEST_CASE_GEN_PAGE_KEYS.has(sub) ? sub : 'documents' };
   }
   if (head === 'profile') {
     return { ...DEFAULT_ROUTE, page: 'profile' };
@@ -194,6 +199,7 @@ export default function App() {
   const [apiSummary, setApiSummary] = useState(null);
   const [apiTrend, setApiTrend] = useState(null);
   const [perfSummary, setPerfSummary] = useState(null);
+  const [testgenSummary, setTestgenSummary] = useState(null);
   const [perfTrend, setPerfTrend] = useState(null);
   const [recentActivity, setRecentActivity] = useState(null);
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
@@ -222,6 +228,7 @@ export default function App() {
   const [automationPage, setAutomationPage] = useState(initialRoute.automationPage);
   const [apitestPage, setApitestPage] = useState(initialRoute.apitestPage);
   const [perfPage, setPerfPage] = useState(initialRoute.perfPage);
+  const [testgenPage, setTestgenPage] = useState(initialRoute.testgenPage);
   const [notice, setNoticeState] = useState(null);
   const notify = (text, tone = 'success') => setNoticeState(text ? { text, tone } : null);
   const [adminNotice, setAdminNotice] = useState('Administration workspace — Super Admin only.');
@@ -270,6 +277,7 @@ export default function App() {
     fetch('/health/apitest').then((r) => setHealth((h) => ({ ...h, apitest: r.ok ? 'up' : 'down' }))).catch(() => setHealth((h) => ({ ...h, apitest: 'down' })));
     fetch('/health/genai').then((r) => setHealth((h) => ({ ...h, genai: r.ok ? 'up' : 'down' }))).catch(() => setHealth((h) => ({ ...h, genai: 'down' })));
     fetch('/health/perf').then((r) => setHealth((h) => ({ ...h, perf: r.ok ? 'up' : 'down' }))).catch(() => setHealth((h) => ({ ...h, perf: 'down' })));
+    fetch('/health/testgen').then((r) => setHealth((h) => ({ ...h, testgen: r.ok ? 'up' : 'down' }))).catch(() => setHealth((h) => ({ ...h, testgen: 'down' })));
 
     // Returns a reason string instead of throwing, so a batch of parallel fetches can report
     // what actually failed. This effect used to swallow every error, which is how a real backend
@@ -308,6 +316,7 @@ export default function App() {
           loadSummary(`/apitest/api/v1/dashboard/trend?days=${days}`, setApiTrend),
           loadSummary(`/perf/api/v1/dashboard/stats?range=${range}`, setPerfSummary),
           loadSummary(`/perf/api/v1/dashboard/trend?range=${range}`, setPerfTrend),
+          loadSummary('/testgen/api/v1/dashboard/summary', setTestgenSummary),
           // Goes through api.js — its own failure already surfaces via the global
           // api.setErrorCallback handler, so it doesn't need to feed `reasons` below.
           api.dashboardRecentActivity().then((rows) => setRecentActivity(rows.slice(0, 5))).catch(() => setRecentActivity(null)),
@@ -315,7 +324,7 @@ export default function App() {
         if (!cancelled) {
           // Only loadSummary's raw fetch() results land here — those bypass api.js entirely,
           // so they're the one path the global error callback above can't already cover.
-          const reasons = [...new Set(results.slice(0, 6).map((r) => (r.status === 'fulfilled' ? r.value : r.reason?.message)).filter(Boolean))];
+          const reasons = [...new Set(results.slice(0, 7).map((r) => (r.status === 'fulfilled' ? r.value : r.reason?.message)).filter(Boolean))];
           if (reasons.length === 1) notify(`Dashboard: ${reasons[0]}`, 'error');
           else if (reasons.length > 1) notify(`Dashboard: some data couldn't load (${reasons.length} issues) — see console for details`, 'error');
           if (reasons.length > 1) console.warn('Dashboard load issues:', reasons);
@@ -428,7 +437,7 @@ export default function App() {
   // Tab switches swap content in place, so the browser never resets scroll on its own.
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [page, adminPage, automationPage, apitestPage, perfPage]);
+  }, [page, adminPage, automationPage, apitestPage, perfPage, testgenPage]);
 
   // Nav clicks push history entries, but nothing listened for the reverse direction, so
   // back/forward changed the URL without changing the screen. Re-parse on every hashchange.
@@ -440,6 +449,7 @@ export default function App() {
       setAutomationPage(r.automationPage);
       setApitestPage(r.apitestPage);
       setPerfPage(r.perfPage);
+      setTestgenPage(r.testgenPage);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -477,10 +487,12 @@ export default function App() {
           ? (apitestPage === 'dashboard' ? 'API Testing Overview' : (API_TESTING_NAV.find((i) => i.key === apitestPage)?.label ?? 'API Testing'))
           : page === 'perf'
             ? (perfPage === 'dashboard' ? 'Performance Overview' : (PERFORMANCE_NAV.find((i) => i.key === perfPage)?.label ?? 'Performance'))
-            : page === 'profile' ? 'Profile' : 'Dashboard';
+            : page === 'testgen'
+              ? (TEST_CASE_GEN_NAV.find((i) => i.key === testgenPage)?.label ?? 'Test Case Generation')
+              : page === 'profile' ? 'Profile' : 'Dashboard';
 
     document.title = title ? `${title} | TESTRIX` : 'TESTRIX Unified Testing Platform';
-  }, [authed, page, adminPage, automationPage, apitestPage, perfPage]);
+  }, [authed, page, adminPage, automationPage, apitestPage, perfPage, testgenPage]);
 
   if (authed === null) return <FullScreenLoader logoSrc={appLogo} subtitle="Loading TESTRIX" />;
   if (!authed) {
@@ -552,6 +564,12 @@ export default function App() {
     window.location.hash = `#/perf/${nextPerfPage}`;
   };
 
+  const setTestgenPageAndHash = (nextTestgenPage) => {
+    setTestgenPage(nextTestgenPage);
+    setPage('testgen');
+    window.location.hash = `#/testgen/${nextTestgenPage}`;
+  };
+
   const logout = () => {
     api.logout(session?.refreshToken).catch(() => { });
     forceLogout();
@@ -619,6 +637,7 @@ export default function App() {
     automation: { label: 'Automation', nav: AUTOMATION_NAV, activeSubPage: automationPage, goOverview: () => setAutomationPageAndHash('dashboard') },
     apitest: { label: 'API Testing', nav: API_TESTING_NAV, activeSubPage: apitestPage, goOverview: () => setApitestPageAndHash('dashboard') },
     perf: { label: 'Performance', nav: PERFORMANCE_NAV, activeSubPage: perfPage, goOverview: () => setPerfPageAndHash('dashboard') },
+    testgen: { label: 'Test Case Generation', nav: TEST_CASE_GEN_NAV, activeSubPage: testgenPage, goOverview: () => setTestgenPageAndHash('documents') },
   };
 
   let pageTitle = 'Dashboard';
@@ -722,6 +741,18 @@ export default function App() {
             ? `${perfSummary.totalRuns > 0 ? Math.round((perfSummary.passedRuns / perfSummary.totalRuns) * 100) : 0}% pass rate · ${perfSummary.runningRuns ?? 0} running`
             : 'Stats unavailable'}
           onSeeMore={() => setPerfPageAndHash('dashboard')}
+        />
+        <OverviewCard
+          icon={ListChecks}
+          tone="info"
+          label="Test Cases"
+          health={health.testgen}
+          kpiValue={testgenSummary ? testgenSummary.totalTestCases ?? 0 : '—'}
+          kpiLabel="Test Cases"
+          summary={testgenSummary
+            ? `${testgenSummary.approved ?? 0} approved · ${testgenSummary.totalDocuments ?? 0} documents`
+            : 'Stats unavailable'}
+          onSeeMore={() => setTestgenPageAndHash('documents')}
         />
         <OverviewCard
           icon={Sparkles}
@@ -958,6 +989,7 @@ export default function App() {
       <PortalLayout
         isCollapsed={superAdmin ? false : isSidebarCollapsed}
         onToggle={toggleSidebar}
+        showToggle={!superAdmin}
         shellClassName={superAdmin ? 'admin-shell' : ''}
         mainClassName={superAdmin ? 'admin-main' : ''}
         sidebar={superAdmin ? (
@@ -969,7 +1001,7 @@ export default function App() {
         ) : (
           <Sidebar
             active={page}
-            activeChildKey={page === 'automation' ? automationPage : page === 'apitest' ? apitestPage : page === 'perf' ? perfPage : null}
+            activeChildKey={page === 'automation' ? automationPage : page === 'apitest' ? apitestPage : page === 'perf' ? perfPage : page === 'testgen' ? testgenPage : null}
             logout={logout}
             project={session?.project}
             onNavigate={(key) => {
@@ -982,11 +1014,13 @@ export default function App() {
               if (key === 'automation') setAutomationPageAndHash(automationPage);
               if (key === 'apitest') setApitestPageAndHash(apitestPage);
               if (key === 'perf') setPerfPageAndHash(perfPage);
+              if (key === 'testgen') setTestgenPageAndHash(testgenPage);
             }}
             onNavigateChild={(parentKey, childKey) => {
               if (parentKey === 'automation') setAutomationPageAndHash(childKey);
               if (parentKey === 'apitest') setApitestPageAndHash(childKey);
               if (parentKey === 'perf') setPerfPageAndHash(childKey);
+              if (parentKey === 'testgen') setTestgenPageAndHash(childKey);
             }}
             isCollapsed={isSidebarCollapsed}
             onToggle={toggleSidebar}
@@ -1030,6 +1064,8 @@ export default function App() {
           <ApiTestingWorkspace activePage={apitestPage} />
         ) : page === 'perf' ? (
           <PerformanceWorkspace activePage={perfPage} />
+        ) : page === 'testgen' ? (
+          <TestGenWorkspace activePage={testgenPage} />
         ) : page === 'profile' ? (
           <Profile setNotice={notify} onProfileSaved={updateSessionUser} project={session?.project} />
         ) : page === 'team' ? (

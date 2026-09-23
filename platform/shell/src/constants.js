@@ -34,12 +34,19 @@ export const PERFORMANCE_NAV = [
 ];
 
 
+export const TEST_CASE_GEN_NAV = [
+  { key: 'documents', label: 'Documents', icon: 'FileText', path: '/' },
+  { key: 'test-cases', label: 'Test Cases', icon: 'Table2', path: '/test-cases' }
+];
+
+
 export const SIDEBAR_NAV = [
   { key: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { key: 'apitest', label: 'API Testing', icon: 'Globe2', children: API_TESTING_NAV },
   { key: 'automation', label: 'Automation', icon: 'Play', children: AUTOMATION_NAV },
 
   { key: 'perf', label: 'Performance', icon: 'Gauge', children: PERFORMANCE_NAV },
+  { key: 'testgen', label: 'Test Case Generation', icon: 'ListChecks', children: TEST_CASE_GEN_NAV },
   { key: 'documentation', label: 'Documentation', icon: 'BookOpen' },
   { key: 'profile', label: 'Profile', icon: 'UserCircle' }
 ];

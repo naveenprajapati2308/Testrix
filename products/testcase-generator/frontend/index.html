@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/src/assets/testric_favicon.png" />
+    <title>Test Case Generation</title>
+    <script>
+      // Applied before first paint so an embedded dark session never flashes a white page.
+      try {
+        var pref = localStorage.getItem('portal-theme') || 'light';
+        var dark = pref === 'dark' || (pref === 'system'
+          && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -7,3 +7,4 @@ include:
   - products/api-testing/docker-compose.yml
   - products/genai/docker-compose.yml
   - products/performance-testing/docker-compose.yml
+  - products/testcase-generator/docker-compose.yml

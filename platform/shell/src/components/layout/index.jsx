@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Bell, BookOpen, Building2, Camera,
+  AlertTriangle, Bell, BookOpen, Building2, Camera,
   CalendarClock,
   Check,
   ChevronDown,
@@ -8,7 +8,7 @@ import {
   ChevronRight, Crown, Database,
   FileText,
   FolderTree,
-  Gauge, GitCompare, Globe2, History, LayoutDashboard, LogOut, Menu, Monitor, Moon, Package, Play, Settings, Sparkles, Sun, TerminalSquare, UserCircle,
+  Gauge, GitCompare, Globe2, History, LayoutDashboard, ListChecks, LogOut, Monitor, Moon, Package, Play, Settings, Sparkles, Sun, Table2, TerminalSquare, UserCircle,
   Users,
   Workflow
 } from 'lucide-react';
@@ -16,12 +16,13 @@ import { GlobalSearchDropdown } from '../../search/components/GlobalSearchDropdo
 import { SIDEBAR_NAV, NAV_MODULE_REQUIREMENT } from '../../constants.js';
 import { getStoredThemePref, resolveEffectiveTheme } from '../../../../../shared/ui/theme-sync.js';
 import { api, auth } from '../../api.js';
+import { isDirty, requestSave, discardChanges } from '../../lib/iframeDirtyState.js';
 import testrixLogo from '../../assets/testrix_logo.png';
 
 const NAV_ICON_MAP = {
   LayoutDashboard, Play, Globe2, Gauge, UserCircle, FileText, TerminalSquare, Camera, GitCompare,
   Database, Workflow, CalendarClock, History, FolderTree, Package, Users, Settings, BookOpen,
-  Sparkles
+  Sparkles, Table2, ListChecks
 };
 
 // ── Layout: Sidebar ─────────────────────────────────────────────────────────
@@ -114,46 +115,28 @@ export function Sidebar({
           width: '100%'
         }}
       >
+        {/* No toggle in here — it lives on the sidebar's right edge (see PortalLayout), which
+            leaves the whole header width to the logo at both widths. */}
         {isCollapsed ? (
-          <>
+          <img
+            src={testrixLogo}
+            alt="TESTRIX"
+            className="brand-logo sidebar-logo"
+            style={{ width: 34, height: 34, margin: 0 }}
+          />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
             <img
               src={testrixLogo}
               alt="TESTRIX"
               className="brand-logo sidebar-logo"
-              style={{ width: 32, height: 32, margin: 0 }}
+              style={{ width: 34, height: 34, flexShrink: 0 }}
             />
-            <button
-              onClick={onToggle}
-              className="sidebar-toggle-btn"
-              title="Expand Sidebar"
-              aria-label="Expand Sidebar"
-            >
-              <Menu size={18} />
-            </button>
-          </>
-        ) : (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-              <img
-                src={testrixLogo}
-                alt="TESTRIX"
-                className="brand-logo sidebar-logo"
-                style={{ width: 34, height: 34, flexShrink: 0 }}
-              />
-              <div style={{ animation: 'fadeIn 0.2s', minWidth: 0, overflow: 'hidden' }}>
-                <strong style={{ fontSize: '15px', letterSpacing: '0.04em' }}>TESTRIX</strong>
-                <span style={{ fontSize: '11px', color: 'var(--sidebar-muted)' }}>Unified Testing Platform</span>
-              </div>
+            <div style={{ animation: 'fadeIn 0.2s', minWidth: 0, overflow: 'hidden' }}>
+              <strong style={{ fontSize: '15px', letterSpacing: '0.04em' }}>TESTRIX</strong>
+              <span style={{ fontSize: '11px', color: 'var(--sidebar-muted)' }}>Unified Testing Platform</span>
             </div>
-            <button
-              onClick={onToggle}
-              className="sidebar-toggle-btn"
-              title="Collapse Sidebar"
-              aria-label="Collapse Sidebar"
-            >
-              <Menu size={18} />
-            </button>
-          </>
+          </div>
         )}
       </div>
 
@@ -426,7 +409,10 @@ export function Sidebar({
   );
 }
 
-export function PortalLayout({ sidebar, topbar, children, shellClassName = '', mainClassName = '', isCollapsed }) {
+export function PortalLayout({
+  sidebar, topbar, children, shellClassName = '', mainClassName = '', isCollapsed,
+  onToggle, showToggle = false
+}) {
   const sidebarWidth = isCollapsed ? 72 : 280;
 
   return (
@@ -450,6 +436,18 @@ export function PortalLayout({ sidebar, topbar, children, shellClassName = '', m
         }}
       >
         {sidebar}
+        {showToggle && onToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="sidebar-edge-toggle"
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!isCollapsed}
+          >
+            {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </button>
+        )}
       </div>
       <main className={`layout-main ${mainClassName}`.trim()}>
         {topbar}
@@ -510,6 +508,9 @@ function WorkspaceBadge({ project }) {
   const [open, setOpen] = useState(false);
   const [projects, setProjects] = useState(null);
   const [switching, setSwitching] = useState(false);
+  const [pendingSwitch, setPendingSwitch] = useState(null);
+  const [savingChanges, setSavingChanges] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -527,8 +528,11 @@ function WorkspaceBadge({ project }) {
     }
   };
 
-  const switchTo = async (targetId) => {
-    if (targetId === project.id || switching) return;
+  // Performs the actual switch. Nothing here runs until any unsaved work is resolved, because
+  // selectProject rotates the refresh token and rewrites the stored session — if the user then
+  // backed out, the page would still show the old workspace's rows while every request carried
+  // the new workspace's token, and those rows would come back as "not found".
+  const commitSwitch = async (targetId) => {
     setSwitching(true);
     try {
       const session = auth.get();
@@ -537,7 +541,39 @@ function WorkspaceBadge({ project }) {
       window.location.reload();
     } catch {
       setSwitching(false);
+      setPendingSwitch(null);
     }
+  };
+
+  const switchTo = async (targetId) => {
+    if (targetId === project.id || switching) return;
+    if (isDirty()) {
+      setOpen(false);
+      setPendingSwitch(projects?.find((p) => p.id === targetId) || { id: targetId, name: 'workspace' });
+      return;
+    }
+    await commitSwitch(targetId);
+  };
+
+  const saveThenSwitch = async () => {
+    setSaveError(null);
+    setSavingChanges(true);
+    const result = await requestSave();
+    setSavingChanges(false);
+    if (!result.ok) {
+      setSaveError(result.message || 'Could not save your changes. Fix the error, then try again.');
+      return;
+    }
+    const target = pendingSwitch;
+    setPendingSwitch(null);
+    await commitSwitch(target.id);
+  };
+
+  const discardThenSwitch = async () => {
+    discardChanges();
+    const target = pendingSwitch;
+    setPendingSwitch(null);
+    await commitSwitch(target.id);
   };
 
   if (!project) return null;
@@ -569,6 +605,48 @@ function WorkspaceBadge({ project }) {
               </button>
             ))
           )}
+        </div>
+      )}
+
+      {pendingSwitch && (
+        <div className="ws-guard-overlay" role="dialog" aria-modal="true" aria-labelledby="ws-guard-title">
+          <div className="ws-guard-card">
+            <div className="ws-guard-head">
+              <AlertTriangle size={18} />
+              <h3 id="ws-guard-title">Unsaved changes</h3>
+            </div>
+            <p className="ws-guard-body">
+              You have unsaved changes in <strong>{project.name}</strong>. Switching to{' '}
+              <strong>{pendingSwitch.name}</strong> will reload the page and lose them.
+            </p>
+            {saveError && <p className="ws-guard-error">{saveError}</p>}
+            <div className="ws-guard-actions">
+              <button
+                type="button"
+                className="ws-guard-btn ghost"
+                onClick={() => { setPendingSwitch(null); setSaveError(null); }}
+                disabled={savingChanges || switching}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ws-guard-btn danger"
+                onClick={discardThenSwitch}
+                disabled={savingChanges || switching}
+              >
+                Discard &amp; switch
+              </button>
+              <button
+                type="button"
+                className="ws-guard-btn primary"
+                onClick={saveThenSwitch}
+                disabled={savingChanges || switching}
+              >
+                {savingChanges ? 'Saving…' : 'Save & switch'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

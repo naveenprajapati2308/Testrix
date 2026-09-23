@@ -16,6 +16,7 @@ const HEALTH_CHECKS = [
   { key: 'automation', label: 'Automation Engine', path: '/health/automation' },
   { key: 'apitest', label: 'API Testing Engine', path: '/health/apitest' },
   { key: 'perf', label: 'Performance Engine', path: '/health/perf' },
+  { key: 'testgen', label: 'Test Case Generation', path: '/health/testgen' },
   { key: 'genai', label: 'AI Assistant', path: '/health/genai' }
 ];
 

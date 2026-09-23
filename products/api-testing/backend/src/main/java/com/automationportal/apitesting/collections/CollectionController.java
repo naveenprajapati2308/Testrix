@@ -51,19 +51,23 @@ public class CollectionController {
 
     @Data
     public static class CollectionPayload {
-        @NotBlank private String name;
+        @NotBlank
+        private String name;
         private String description;
     }
 
     @Data
     public static class VariablesPayload {
-        @NotNull private List<com.automationportal.apitesting.execution.dto.KeyValueItem> variables;
+        @NotNull
+        private List<com.automationportal.apitesting.execution.dto.KeyValueItem> variables;
     }
 
     @Data
     public static class RequestPayload {
-        @NotBlank private String name;
-        @NotNull private ExecutionRequest config;
+        @NotBlank
+        private String name;
+        @NotNull
+        private ExecutionRequest config;
         private Long folderId;
     }
 
@@ -74,7 +78,8 @@ public class CollectionController {
 
     @Data
     public static class ImportPayload {
-        @NotBlank private String postmanJson;
+        @NotBlank
+        private String postmanJson;
     }
 
     // ---- collections ----
@@ -87,7 +92,9 @@ public class CollectionController {
                 .toList();
     }
 
-    public record CollectionSummary(Long id, String name, String description, long requestCount, Long activeEnvironmentId) { }
+    public record CollectionSummary(Long id, String name, String description, long requestCount,
+            Long activeEnvironmentId) {
+    }
 
     @PostMapping
     public ApiCollection create(@Valid @RequestBody CollectionPayload payload) {
@@ -112,7 +119,8 @@ public class CollectionController {
         collectionRepository.deleteById(id);
     }
 
-    // ---- collection variables (Postman-style {{key}} values, e.g. {{baseUrl}}) ----
+    // ---- collection variables (Postman-style {{key}} values, e.g. {{baseUrl}})
+    // ----
 
     @GetMapping("/{id}/variables")
     public List<com.automationportal.apitesting.execution.dto.KeyValueItem> getVariables(@PathVariable Long id) {
@@ -131,22 +139,18 @@ public class CollectionController {
     // ---- requests within a collection ----
 
     public record RequestListItem(Long id, String name, String method, String url, Long folderId,
-                                  Integer lastStatusCode, String lastStatusClass,
-                                  Long lastDurationMs, java.time.Instant lastExecutedAt) { }
+            Integer lastStatusCode, String lastStatusClass,
+            Long lastDurationMs, java.time.Instant lastExecutedAt) {
+    }
 
-    /**
-     * Requests table for the Tester's collection landing page: each row
-     * carries its own last-execution summary (status/time) and folderId (for
-     * grouping under the collection's folder tree), sorted so the
-     * most-recently-run request surfaces first — never-run requests sort last.
-     */
     @GetMapping("/{id}/requests")
     public List<RequestListItem> requests(@PathVariable Long id) {
         findCollection(id);
         return requestRepository.findByCollectionIdOrderBySeqAsc(id).stream()
                 .map(r -> {
                     ExecutionHistory last = executionHistoryRepository
-                            .findFirstByApiTypeAndApiIdOrderByExecutedAtDesc(ExecutionHistory.ApiType.COLLECTION, r.getId());
+                            .findFirstByApiTypeAndApiIdOrderByExecutedAtDesc(ExecutionHistory.ApiType.COLLECTION,
+                                    r.getId());
                     return new RequestListItem(r.getId(), r.getName(), r.getMethod(), r.getUrl(), r.getFolderId(),
                             last == null ? null : last.getResponseStatusCode(),
                             last == null ? null : last.getResponseStatusClass(),
@@ -154,21 +158,28 @@ public class CollectionController {
                             last == null ? null : last.getExecutedAt());
                 })
                 .sorted((a, b) -> {
-                    if (a.lastExecutedAt() == null && b.lastExecutedAt() == null) return 0;
-                    if (a.lastExecutedAt() == null) return 1;
-                    if (b.lastExecutedAt() == null) return -1;
+                    if (a.lastExecutedAt() == null && b.lastExecutedAt() == null)
+                        return 0;
+                    if (a.lastExecutedAt() == null)
+                        return 1;
+                    if (b.lastExecutedAt() == null)
+                        return -1;
                     return b.lastExecutedAt().compareTo(a.lastExecutedAt());
                 })
                 .toList();
     }
 
-    /** Full stored config for one request — used to load the workspace page directly by route. */
+    /**
+     * Full stored config for one request — used to load the workspace page directly
+     * by route.
+     */
     @GetMapping("/{id}/requests/{requestId}")
     public CollectionRequest getRequest(@PathVariable Long id, @PathVariable Long requestId) {
         findCollection(id);
         return requestRepository.findById(requestId)
                 .filter(x -> x.getCollectionId().equals(id))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
     }
 
     @PostMapping("/{id}/requests")
@@ -185,11 +196,12 @@ public class CollectionController {
     @PutMapping("/{id}/requests/{requestId}")
     @SneakyThrows
     public CollectionRequest updateRequest(@PathVariable Long id, @PathVariable Long requestId,
-                                           @Valid @RequestBody RequestPayload payload) {
+            @Valid @RequestBody RequestPayload payload) {
         findCollection(id);
         CollectionRequest r = requestRepository.findById(requestId)
                 .filter(x -> x.getCollectionId().equals(id))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
         apply(r, payload);
         return requestRepository.save(r);
     }
@@ -199,18 +211,22 @@ public class CollectionController {
         findCollection(id);
         CollectionRequest r = requestRepository.findById(requestId)
                 .filter(x -> x.getCollectionId().equals(id))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
         requestRepository.delete(r);
     }
 
-    /** Moves a request into a folder (or back to "Ungrouped" when folderId is null). */
+    /**
+     * Moves a request into a folder (or back to "Ungrouped" when folderId is null).
+     */
     @PatchMapping("/{id}/requests/{requestId}/move")
     public CollectionRequest moveRequest(@PathVariable Long id, @PathVariable Long requestId,
-                                        @RequestBody MoveRequestPayload payload) {
+            @RequestBody MoveRequestPayload payload) {
         findCollection(id);
         CollectionRequest r = requestRepository.findById(requestId)
                 .filter(x -> x.getCollectionId().equals(id))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
         r.setFolderId(payload.getFolderId());
         return requestRepository.save(r);
     }
@@ -230,13 +246,15 @@ public class CollectionController {
         ApiCollection collection = findCollection(id);
         CollectionRequest r = requestRepository.findById(requestId)
                 .filter(x -> x.getCollectionId().equals(id))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
         ExecutionRequest config = objectMapper.readValue(r.getConfigJson(), ExecutionRequest.class);
 
-        List<com.automationportal.apitesting.execution.dto.KeyValueItem> vars =
-                variableResolver.parseVariables(collection.getVariables());
+        List<com.automationportal.apitesting.execution.dto.KeyValueItem> vars = variableResolver
+                .parseVariables(collection.getVariables());
         if (collection.getActiveEnvironmentId() != null) {
-            CollectionEnvironment env = environmentRepository.findById(collection.getActiveEnvironmentId()).orElse(null);
+            CollectionEnvironment env = environmentRepository.findById(collection.getActiveEnvironmentId())
+                    .orElse(null);
             if (env != null) {
                 vars = variableResolver.merge(vars, variableResolver.parseVariables(env.getVariables()));
             }
@@ -246,29 +264,37 @@ public class CollectionController {
         if (unresolved != null) {
             ExecutionResponse blocked = ExecutionResponse.builder()
                     .success(false)
-                    .errorMessage("Unresolved variable {{" + unresolved + "}} — add it under this collection's Variables and try again.")
+                    .errorMessage("Unresolved variable {{" + unresolved
+                            + "}} — add it under this collection's Variables and try again.")
                     .durationMs(0)
                     .build();
-            executionHistoryService.record(collection.getProjectId(), ExecutionHistory.ApiType.COLLECTION, r.getId(), r.getName(),
+            executionHistoryService.record(collection.getProjectId(), ExecutionHistory.ApiType.COLLECTION, r.getId(),
+                    r.getName(),
                     null, null, ExecutionHistory.TriggeredBy.MANUAL, config, blocked);
             return blocked;
         }
-        // {{$randomMobile}}, {{$randomEmail}}, {{$randomInt}}, {{$timestamp}}, {{$guid}} — a fresh
-        // value every run, so re-running the same saved request never resends a stale duplicate.
+        // {{$randomMobile}}, {{$randomEmail}}, {{$randomInt}}, {{$timestamp}},
+        // {{$guid}} — a fresh
+        // value every run, so re-running the same saved request never resends a stale
+        // duplicate.
         dynamicValueResolver.resolve(config, new java.util.HashMap<>());
 
         ExecutionResponse response = executionEngineService.execute(config);
-        ExecutionHistory history = executionHistoryService.record(collection.getProjectId(), ExecutionHistory.ApiType.COLLECTION,
+        ExecutionHistory history = executionHistoryService.record(collection.getProjectId(),
+                ExecutionHistory.ApiType.COLLECTION,
                 r.getId(), r.getName(), null, null, ExecutionHistory.TriggeredBy.MANUAL, config, response);
 
-        // Collection requests had no auto-validation at all before — rule-based validation and
-        // required-field business validation now run here on every execute, same as Regular/Base APIs.
+        // Collection requests had no auto-validation at all before — rule-based
+        // validation and
+        // required-field business validation now run here on every execute, same as
+        // Regular/Base APIs.
         Boolean passed = validationEngine.validate(ExecutionHistory.ApiType.COLLECTION, r.getId(),
                 history.getId(), response.getBody());
         Boolean businessOk = businessValidationService.autoCheck(config, collection.getProjectId(),
                 com.automationportal.apitesting.validation.BusinessValidationRun.ApiType.COLLECTION, r.getId(),
                 "auto:MANUAL", history.getId());
-        Boolean combined = com.automationportal.apitesting.validation.BusinessValidationService.combine(passed, businessOk);
+        Boolean combined = com.automationportal.apitesting.validation.BusinessValidationService.combine(passed,
+                businessOk);
         if (combined != null) {
             executionHistoryService.markValidation(history, combined);
         }
@@ -277,9 +303,11 @@ public class CollectionController {
     }
 
     /**
-     * On-demand only — never scheduled. Resolves this request's {{variables}} into a
+     * On-demand only — never scheduled. Resolves this request's {{variables}} into
+     * a
      * real, otherwise-valid config, strips every field flagged Required, runs that
-     * variant once, and records which of those fields the backend actually complained
+     * variant once, and records which of those fields the backend actually
+     * complained
      * about being missing.
      */
     @PostMapping("/{id}/requests/{requestId}/validation-check")
@@ -289,13 +317,15 @@ public class CollectionController {
         ApiCollection collection = findCollection(id);
         CollectionRequest r = requestRepository.findById(requestId)
                 .filter(x -> x.getCollectionId().equals(id))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
+                .orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Request not found in collection"));
         ExecutionRequest config = objectMapper.readValue(r.getConfigJson(), ExecutionRequest.class);
 
-        List<com.automationportal.apitesting.execution.dto.KeyValueItem> vars =
-                variableResolver.parseVariables(collection.getVariables());
+        List<com.automationportal.apitesting.execution.dto.KeyValueItem> vars = variableResolver
+                .parseVariables(collection.getVariables());
         if (collection.getActiveEnvironmentId() != null) {
-            CollectionEnvironment env = environmentRepository.findById(collection.getActiveEnvironmentId()).orElse(null);
+            CollectionEnvironment env = environmentRepository.findById(collection.getActiveEnvironmentId())
+                    .orElse(null);
             if (env != null) {
                 vars = variableResolver.merge(vars, variableResolver.parseVariables(env.getVariables()));
             }
@@ -304,7 +334,8 @@ public class CollectionController {
         String unresolved = variableResolver.firstUnresolvedPlaceholder(config);
         if (unresolved != null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Unresolved variable {{" + unresolved + "}} — add it under this collection's Variables and try again.");
+                    "Unresolved variable {{" + unresolved
+                            + "}} — add it under this collection's Variables and try again.");
         }
         dynamicValueResolver.resolve(config, new java.util.HashMap<>());
 
@@ -330,7 +361,8 @@ public class CollectionController {
     @PostMapping("/import/postman")
     public PostmanImportService.ImportResult importPostman(@Valid @RequestBody ImportPayload payload) {
         try {
-            return postmanImportService.importPostman(payload.getPostmanJson(), currentProjectService.requireProjectId());
+            return postmanImportService.importPostman(payload.getPostmanJson(),
+                    currentProjectService.requireProjectId());
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
@@ -338,7 +370,8 @@ public class CollectionController {
 
     @Data
     public static class OpenApiImportPayload {
-        @NotBlank private String specText;
+        @NotBlank
+        private String specText;
     }
 
     @PostMapping("/import/openapi")

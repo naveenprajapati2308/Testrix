@@ -96,6 +96,8 @@ services:
         condition: service_started
       performance-testing-backend:
         condition: service_started
+      testcase-generator-backend:
+        condition: service_started
       genai-service:
         condition: service_started
       testrix-landing:
