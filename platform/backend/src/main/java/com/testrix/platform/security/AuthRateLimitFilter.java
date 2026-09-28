@@ -74,10 +74,21 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
+    /**
+     * The LAST X-Forwarded-For hop, not the first. nginx builds this header with
+     * $proxy_add_x_forwarded_for, which appends its own $remote_addr to whatever the client
+     * sent — so the first entry is fully attacker-controlled and taking it let anyone reset
+     * their own throttle by sending a different X-Forwarded-For on every request. The last
+     * entry is the one our own gateway wrote, and is the only part a client cannot forge.
+     */
     private String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+            String[] hops = forwarded.split(",");
+            String last = hops[hops.length - 1].trim();
+            if (!last.isEmpty()) {
+                return last;
+            }
         }
         return request.getRemoteAddr();
     }

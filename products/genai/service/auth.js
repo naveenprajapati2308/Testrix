@@ -19,7 +19,7 @@ export function requireAuth(req, res, next) {
     }
     const token = header.substring(7);
     try {
-        const payload = jwt.verify(token, secret);
+        const payload = jwt.verify(token, secret, { algorithms: ['HS256'] });
         req.auth = {
             token,
             username: payload.sub,

@@ -174,11 +174,15 @@ public class AuthController {
         return ApiResponse.ok(UserProfileDto.from(authenticatedUserService.currentUser()));
     }
 
+    // Always answers "otp_sent", whether or not the address belongs to an account. Returning
+    // "Email not found" here turned an anonymous endpoint into an account-existence oracle:
+    // anyone could test an address list and learn which ones are registered.
     @PostMapping("/forgot-password")
     public ApiResponse<Map<String, String>> forgotPassword(@Valid @RequestBody AuthDtos.ForgotPasswordRequest request, HttpServletRequest servletRequest) {
-        User user = userRepository.findByEmail(request.email()).orElseThrow(() -> new IllegalArgumentException("Email not found"));
-        otpService.send(user.getUsername(), user.getEmail(), OtpPurpose.FORGOT_PASSWORD);
-        auditService.record(user, AuditAction.OTP_SENT, "Forgot password OTP sent", servletRequest);
+        userRepository.findByEmail(request.email()).ifPresentOrElse(user -> {
+            otpService.send(user.getUsername(), user.getEmail(), OtpPurpose.FORGOT_PASSWORD);
+            auditService.record(user, AuditAction.OTP_SENT, "Forgot password OTP sent", servletRequest);
+        }, () -> log.info("Forgot-password requested for an address with no account"));
         return ApiResponse.ok(Map.of("status", "otp_sent"));
     }
 

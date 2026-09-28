@@ -1,13 +1,3 @@
--- Test Case Generation: SRS upload -> AI generation -> review/edit -> approval.
---
--- Every top-level table carries project_id: testrix_platform is one shared schema across all
--- Testrix products and a workspace's test cases must never be visible from another workspace.
--- Child tables (steps/preconditions/test data/history) deliberately do NOT carry project_id --
--- they are only ever reached through a parent whose ownership is checked first, the same shape
--- performance-testing uses for perf_metric_sample.
---
--- Distinct from automation-portal's existing test_case_catalog: that is an inventory discovered
--- FROM executions (class/method names). These are authored definitions that exist before any run.
 
 CREATE TABLE srs_documents (
     id                  BIGINT PRIMARY KEY AUTO_INCREMENT,

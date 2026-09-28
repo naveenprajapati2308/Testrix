@@ -34,7 +34,7 @@ services:
     volumes:
       - performance_testing_k6_runs:/app/k6-runs
     ports:
-      - "8082:8080"
+      - "127.0.0.1:8082:8080"
     networks:
       - testrix
 
