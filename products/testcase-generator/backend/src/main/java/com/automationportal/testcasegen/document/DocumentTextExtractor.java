@@ -1,6 +1,7 @@
 package com.automationportal.testcasegen.document;
 
 import com.automationportal.testcasegen.common.ApiException;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -12,6 +13,7 @@ import java.io.ByteArrayInputStream;
 
 /** Extracts plain text from an uploaded SRS. Ported from Archive's documentParser.utility.js:
  *  PDFBox replaces pdf-parse, POI/XWPF replaces mammoth. */
+@Slf4j
 @Component
 public class DocumentTextExtractor {
 
@@ -37,7 +39,10 @@ public class DocumentTextExtractor {
         try (PDDocument pdf = Loader.loadPDF(bytes)) {
             return new PDFTextStripper().getText(pdf);
         } catch (Exception e) {
-            throw ApiException.badRequest("Failed to parse PDF document: " + e.getMessage());
+            log.warn("Failed to parse PDF document: {}", e.getMessage());
+            throw ApiException.badRequest(
+                    "This PDF could not be read. It may be corrupted, password-protected or saved in an "
+                            + "unexpected format - try re-exporting it and uploading it again.");
         }
     }
 
@@ -46,7 +51,10 @@ public class DocumentTextExtractor {
              XWPFWordExtractor extractor = new XWPFWordExtractor(docx)) {
             return extractor.getText();
         } catch (Exception e) {
-            throw ApiException.badRequest("Failed to parse DOCX document: " + e.getMessage());
+            log.warn("Failed to parse DOCX document: {}", e.getMessage());
+            throw ApiException.badRequest(
+                    "This Word document could not be read. It may be corrupted or saved in an unexpected format "
+                            + "- try re-saving it from Word (File > Save As > .docx) and uploading it again.");
         }
     }
 

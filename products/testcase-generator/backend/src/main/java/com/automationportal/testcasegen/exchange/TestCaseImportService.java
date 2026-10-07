@@ -6,6 +6,7 @@ import com.automationportal.testcasegen.testcase.TestCaseDto;
 import com.automationportal.testcasegen.testcase.TestCaseService;
 import com.automationportal.testcasegen.testcase.TestType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
  * scramble which test case gets which edit. Preview and apply run the same comparison — apply
  * just persists the result — so what the user confirms is exactly what is written.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TestCaseImportService {
@@ -108,7 +110,10 @@ public class TestCaseImportService {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw ApiException.badRequest("Could not read the spreadsheet: " + e.getMessage());
+            log.warn("Could not read the spreadsheet: {}", e.getMessage());
+            throw ApiException.badRequest(
+                    "This spreadsheet could not be read. Make sure it's a valid .xlsx file - the one exported "
+                            + "from Testrix is the safest starting point - and try again.");
         }
     }
 

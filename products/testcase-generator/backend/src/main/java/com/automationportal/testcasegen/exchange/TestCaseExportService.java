@@ -4,6 +4,7 @@ import com.automationportal.testcasegen.common.ApiException;
 import com.automationportal.testcasegen.testcase.TestCaseDto;
 import com.automationportal.testcasegen.testcase.TestCaseService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import java.util.List;
 
 /** Produces the .xlsx that closes the gap left by the grid's community licence: edit in real
  *  Excel or Sheets, then import the file back. CSV is offered for tools that prefer it. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TestCaseExportService {
@@ -65,7 +67,8 @@ public class TestCaseExportService {
             workbook.write(out);
             return out.toByteArray();
         } catch (Exception e) {
-            throw ApiException.internal("Failed to build the Excel export: " + e.getMessage());
+            log.error("Failed to build the Excel export: {}", e.getMessage());
+            throw ApiException.internal("Failed to build the Excel export. Please try again.");
         }
     }
 

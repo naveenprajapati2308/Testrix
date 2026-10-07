@@ -35,5 +35,5 @@ loveable.ai/
 # Real signed JWTs used for manual/local testing — never a source file
 .test-token
 
-#restrict documnets to upload in git 
-.docs/
+#restrict documnets to upload in git
+docs/
