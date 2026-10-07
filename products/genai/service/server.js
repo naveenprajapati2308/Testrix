@@ -38,7 +38,6 @@ app.post('/chat', requireAuth, async (req, res)=>{
         return res.status(400).json({message:"Message is required"});
     }
 
-    console.log("Message ", message);
 
     // Cache key is derived from the verified JWT (username + project), never the client
     // body — a client-supplied key would let a project switch leak stale cross-project

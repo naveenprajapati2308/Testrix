@@ -17,7 +17,7 @@ services:
       PERFORMANCE_BASE_URL: http://performance-testing-backend:8080
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     networks:
       - testrix
 

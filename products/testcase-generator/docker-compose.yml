@@ -28,7 +28,7 @@ services:
     volumes:
       - testcase_generator_srs_files:/app/srs-files
     ports:
-      - "8083:8080"
+      - "127.0.0.1:8083:8080"
     networks:
       - testrix
 

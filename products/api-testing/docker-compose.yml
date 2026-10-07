@@ -70,7 +70,7 @@ services:
       # instance's own scheduleWorkerExecutor pool (SCHEDULER_MAX_CONCURRENT above).
       SCHEDULER_DRAIN_ENABLED: "false"
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"
     volumes:
       - api_testing_history_bodies:/app/history-bodies
       - api_testing_form_data_files:/app/form-data-files

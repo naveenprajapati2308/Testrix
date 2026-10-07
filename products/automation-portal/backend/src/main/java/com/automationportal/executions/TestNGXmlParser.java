@@ -1,5 +1,7 @@
 package com.automationportal.executions;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -8,6 +10,7 @@ import org.w3c.dom.NodeList;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,12 +27,29 @@ import java.util.stream.Stream;
 
 @Component
 public class TestNGXmlParser {
+    private static final Logger log = LoggerFactory.getLogger(TestNGXmlParser.class);
+
+    /**
+     * TestNG's results XML is written by whatever framework the run executed, so it is not
+     * trusted input. A default DocumentBuilderFactory resolves DOCTYPEs and external entities,
+     * which would turn a crafted results file into local-file disclosure, SSRF from inside the
+     * backend, or entity-expansion DoS. TestNG results never use a DTD, so refusing one outright
+     * is the safe setting rather than disabling the resolvers one by one.
+     */
+    private static DocumentBuilder secureBuilder() throws ParserConfigurationException {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+        return factory.newDocumentBuilder();
+    }
 
     public List<ExecutionTestCase> parse(File xmlFile, Long executionId, String executionCode, String artifactsRoot) {
         List<ExecutionTestCase> testCases = new ArrayList<>();
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder builder = factory.newDocumentBuilder();
+            DocumentBuilder builder = secureBuilder();
             Document doc = builder.parse(xmlFile);
             doc.getDocumentElement().normalize();
 
@@ -229,7 +249,7 @@ public class TestNGXmlParser {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.warn("Failed to parse TestNG results XML {}: {}", xmlFile, e.toString());
         }
         return testCases;
     }
@@ -293,7 +313,7 @@ public class TestNGXmlParser {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.warn("Failed to resolve screenshot path under {}: {}", artifactsRoot, e.toString());
         }
         return null;
     }

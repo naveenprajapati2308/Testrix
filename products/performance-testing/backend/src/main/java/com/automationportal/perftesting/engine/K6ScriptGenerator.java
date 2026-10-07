@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Component
 @RequiredArgsConstructor
@@ -63,9 +64,9 @@ public class K6ScriptGenerator {
         sb.append("};\n\n");
 
         // Request details
-        sb.append("const url = '").append(escapeJs(test.getTargetUrl())).append("';\n");
+        sb.append("const url = ").append(jsString(test.getTargetUrl())).append(";\n");
         sb.append("const method = '").append(test.getHttpMethod().name()).append("';\n");
-        sb.append("const payload = ").append(test.getRequestBody() != null ? "'" + escapeJs(test.getRequestBody()) + "'" : "null").append(";\n\n");
+        sb.append("const payload = ").append(test.getRequestBody() != null ? jsString(test.getRequestBody()) : "null").append(";\n\n");
 
         // Default Headers
         Map<String, String> headers = getHeadersMap(test.getRequestHeaders(), test.getAuthType(), test.getAuthValue(), test.getAuthKeyName(), test.getAuthKeyIn());
@@ -142,9 +143,9 @@ public class K6ScriptGenerator {
         sb.append("};\n\n");
 
         // Target Configuration
-        sb.append("const url = '").append(escapeJs(test.getTargetUrl())).append("';\n");
+        sb.append("const url = ").append(jsString(test.getTargetUrl())).append(";\n");
         sb.append("const method = '").append(test.getHttpMethod().name()).append("';\n");
-        sb.append("const basePayload = ").append(test.getRequestBody() != null ? "'" + escapeJs(test.getRequestBody()) + "'" : "null").append(";\n\n");
+        sb.append("const basePayload = ").append(test.getRequestBody() != null ? jsString(test.getRequestBody()) : "null").append(";\n\n");
 
         // Default Headers
         Map<String, String> defaultHeaders = getHeadersMap(test.getRequestHeaders(), test.getAuthType(), test.getAuthValue(), test.getAuthKeyName(), test.getAuthKeyIn());
@@ -225,9 +226,52 @@ public class K6ScriptGenerator {
         return sb.toString();
     }
 
-    private String escapeJs(String input) {
-        if (input == null) return "";
-        return input.replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+    /**
+     * Emits a complete, quoted JS string literal. Jackson's JSON string encoding is a strict
+     * subset of JS string syntax, so this reuses it instead of hand-rolling escapes — the
+     * previous hand-rolled version escaped the quote but not a preceding backslash, so a value
+     * ending in "\" closed the literal early and let the rest run as script in the k6 file.
+     */
+    private String jsString(String input) {
+        try {
+            return mapper.writeValueAsString(input == null ? "" : input);
+        } catch (Exception e) {
+            return "\"\"";
+        }
+    }
+
+    private static final Pattern NUMERIC = Pattern.compile("-?\\d+(\\.\\d+)?");
+    private static final Pattern PROPERTY_PATH =
+            Pattern.compile("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*|\\['[A-Za-z0-9_$ -]*'\\])*");
+
+    /** Assertion values interpolated as bare JS (numeric comparisons) must not be able to carry
+     *  an expression, so anything that is not a plain number is rejected rather than embedded. */
+    private static String numericLiteral(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (!NUMERIC.matcher(trimmed).matches()) {
+            throw new IllegalArgumentException("Assertion value must be a number, got: " + value);
+        }
+        return trimmed;
+    }
+
+    /** Same for the STATUS ... IN [a, b, c] form — a comma-separated list of plain numbers. */
+    private static String numericListLiteral(String value) {
+        String[] parts = (value == null ? "" : value.trim()).split(",");
+        List<String> numbers = new ArrayList<>(parts.length);
+        for (String part : parts) {
+            numbers.add(numericLiteral(part));
+        }
+        return String.join(", ", numbers);
+    }
+
+    /** A JSONPath reduced to a property/index chain. Anything outside identifier, digit, dot,
+     *  quote and bracket characters would be executed as script once appended after "json.". */
+    private static String propertyPath(String path) {
+        String cleaned = (path == null ? "" : path).replace("$.", "").replace("[", "['").replace("]", "']");
+        if (!PROPERTY_PATH.matcher(cleaned).matches()) {
+            throw new IllegalArgumentException("Unsupported JSON path: " + path);
+        }
+        return cleaned;
     }
 
     private String toJsonString(Object obj) {
@@ -273,44 +317,48 @@ public class K6ScriptGenerator {
         return varsMap;
     }
 
+    // Everything below lands in the k6 script as executable JavaScript, so no user-supplied
+    // value may be appended raw: strings go through jsString(), and the comparisons that need a
+    // bare literal (status codes, durations, property paths) are validated instead of escaped.
     private String buildCheckLambda(com.automationportal.perftesting.perftest.Assertion assertion) {
         String val = assertion.getValue() != null ? assertion.getValue() : "";
         switch (assertion.getType().toUpperCase()) {
             case "STATUS":
                 if ("IN".equalsIgnoreCase(assertion.getOperator())) {
-                    return "[" + val + "].map(String).includes(String(r.status))";
+                    return "[" + numericListLiteral(val) + "].map(String).includes(String(r.status))";
                 } else if ("LT".equalsIgnoreCase(assertion.getOperator())) {
-                    return "r.status < " + val;
+                    return "r.status < " + numericLiteral(val);
                 } else if ("GT".equalsIgnoreCase(assertion.getOperator())) {
-                    return "r.status > " + val;
+                    return "r.status > " + numericLiteral(val);
                 } else if ("NE".equalsIgnoreCase(assertion.getOperator())) {
-                    return "r.status != " + val;
+                    return "r.status != " + numericLiteral(val);
                 }
-                return "r.status == " + val;
+                return "r.status == " + numericLiteral(val);
 
             case "BODY_CONTAINS":
-                return "r.body && r.body.includes('" + escapeJs(val) + "')";
+                return "r.body && r.body.includes(" + jsString(val) + ")";
 
             case "HEADER_EXISTS":
-                return "r.headers && r.headers['" + escapeJs(assertion.getKey()) + "'] !== undefined";
+                return "r.headers && r.headers[" + jsString(assertion.getKey()) + "] !== undefined";
 
             case "HEADER_VALUE":
                 if ("CONTAINS".equalsIgnoreCase(assertion.getOperator())) {
-                    return "r.headers && r.headers['" + escapeJs(assertion.getKey()) + "'] && r.headers['" + escapeJs(assertion.getKey()) + "'].includes('" + escapeJs(val) + "')";
+                    return "r.headers && r.headers[" + jsString(assertion.getKey()) + "] && r.headers["
+                            + jsString(assertion.getKey()) + "].includes(" + jsString(val) + ")";
                 }
-                return "r.headers && r.headers['" + escapeJs(assertion.getKey()) + "'] === '" + escapeJs(val) + "'";
+                return "r.headers && r.headers[" + jsString(assertion.getKey()) + "] === " + jsString(val);
 
             case "RESPONSE_TIME":
                 if ("GT".equalsIgnoreCase(assertion.getOperator())) {
-                    return "r.timings.duration > " + val;
+                    return "r.timings.duration > " + numericLiteral(val);
                 }
-                return "r.timings.duration < " + val;
+                return "r.timings.duration < " + numericLiteral(val);
 
             case "JSON_PATH":
                 // Standard JSONPath is complex in JS, we can extract basic root fields or fall back to checking if path string matches
                 // For simplicity in JS check, we check if the response body JSON parses and satisfies a property lookup
-                String cleanPath = assertion.getPath().replace("$.", "").replace("[", "['").replace("]", "']");
-                return "(() => { try { const json = JSON.parse(r.body); return json." + cleanPath + " == '" + escapeJs(val) + "'; } catch(e) { return false; } })()";
+                return "(() => { try { const json = JSON.parse(r.body); return json." + propertyPath(assertion.getPath())
+                        + " == " + jsString(val) + "; } catch(e) { return false; } })()";
 
             default:
                 return "true";
