@@ -413,10 +413,17 @@ public class ExecutionEventService {
         int total = c.total(), passed = c.passed(), failed = c.failed(), skipped = c.skipped();
         long totalDurationMs = c.totalDurationMs();
 
-        execution.setTotalTests(total);
-        execution.setPassedTests(passed);
-        execution.setFailedTests(failed);
-        execution.setSkippedTests(skipped);
+        if (total == 0 && execution.getTotalTests() > 0) {
+            total = execution.getTotalTests();
+            passed = execution.getPassedTests();
+            failed = execution.getFailedTests();
+            skipped = execution.getSkippedTests();
+        } else {
+            execution.setTotalTests(total);
+            execution.setPassedTests(passed);
+            execution.setFailedTests(failed);
+            execution.setSkippedTests(skipped);
+        }
         execution.setTotalDurationMs(totalDurationMs);
         execution.setEndTime(Instant.now());
 

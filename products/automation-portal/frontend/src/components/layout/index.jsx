@@ -2,9 +2,13 @@ import React, { useEffect, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Globe2,
   LogOut,
-  Search
+  Search,
+  Briefcase,
+  Cpu,
+  Settings2
 } from 'lucide-react';
 import appLogo from '../../assets/testrix_logo.png';
 import { USER_NAV } from '../../constants.js';
@@ -19,6 +23,12 @@ export function Sidebar({
   onToggle,
   isProjectAdmin
 }) {
+  const [openSubmenus, setOpenSubmenus] = useState({ settings: true });
+
+  const toggleSubmenu = (key) => {
+    setOpenSubmenus((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
     <aside
       className="sidebar"
@@ -57,24 +67,107 @@ export function Sidebar({
         {USER_NAV.filter((item) => item.key !== 'environments' || auth.get()?.user?.role === 'SUPER_ADMIN')
           .filter((item) => item.key !== 'automation-setup' || isProjectAdmin)
           .map((item) => {
-          const Icon = item._icon;
-          return (
-            <button
-              key={item.key}
-              className={active === item.key ? 'active' : ''}
-              onClick={() => setActive(item.key)}
-              title={item.label}
-              style={{
-                justifyContent: isCollapsed ? 'center' : 'flex-start',
-                padding: isCollapsed ? '0' : '0 12px',
-                borderRadius: '8px'
-              }}
-            >
-              <Icon size={18} style={{ flexShrink: 0 }} />
-              {!isCollapsed && <span style={{ animation: 'fadeIn 0.2s' }}>{item.label}</span>}
-            </button>
-          );
-        })}
+            const Icon = item._icon || Settings2;
+            const hasChildren = item.children && item.children.length > 0;
+            const isChildActive = hasChildren && item.children.some((c) => c.key === active);
+            const isItemActive = active === item.key || isChildActive;
+
+            if (hasChildren) {
+              const isOpen = openSubmenus[item.key] ?? true;
+
+              if (isCollapsed) {
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={isItemActive ? 'active' : ''}
+                    onClick={() => {
+                      onToggle();
+                      if (item.children?.length > 0) {
+                        setActive(item.children[0].key);
+                      }
+                    }}
+                    title={item.label}
+                    style={{
+                      justifyContent: 'center',
+                      padding: 0,
+                      borderRadius: '8px'
+                    }}
+                  >
+                    <Icon size={18} style={{ flexShrink: 0 }} />
+                  </button>
+                );
+              }
+
+              return (
+                <div key={item.key} className="nav-parent-group">
+                  <button
+                    type="button"
+                    className={`nav-parent-btn ${isItemActive ? 'parent-active' : ''}`}
+                    onClick={() => toggleSubmenu(item.key)}
+                    title={item.label}
+                    style={{
+                      justifyContent: 'space-between',
+                      padding: '0 12px',
+                      borderRadius: '8px',
+                      height: '40px',
+                      minHeight: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      width: '100%'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Icon size={18} style={{ flexShrink: 0 }} />
+                      <span style={{ animation: 'fadeIn 0.2s', fontWeight: 500 }}>{item.label}</span>
+                    </div>
+                    <span style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                      {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                  </button>
+
+                  {isOpen && (
+                    <div className="nav-submenu-list">
+                      {item.children.map((child) => {
+                        const ChildIcon = child._icon || (child.icon === 'Briefcase' ? Briefcase : child.icon === 'Cpu' ? Cpu : Settings2);
+                        const isSelected = active === child.key;
+                        return (
+                          <button
+                            key={child.key}
+                            type="button"
+                            className={`nav-sub-btn ${isSelected ? 'active' : ''}`}
+                            onClick={() => setActive(child.key)}
+                            title={child.label}
+                          >
+                            <ChildIcon size={14} style={{ flexShrink: 0 }} />
+                            <span>{child.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                className={active === item.key ? 'active' : ''}
+                onClick={() => setActive(item.key)}
+                title={item.label}
+                style={{
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  padding: isCollapsed ? '0' : '0 12px',
+                  borderRadius: '8px'
+                }}
+              >
+                <Icon size={18} style={{ flexShrink: 0 }} />
+                {!isCollapsed && <span style={{ animation: 'fadeIn 0.2s' }}>{item.label}</span>}
+              </button>
+            );
+          })}
       </nav>
 
       {/* Collapse Toggle Button */}

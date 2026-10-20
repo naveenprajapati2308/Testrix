@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../api.js';
 import { Panel } from '../shared/index.jsx';
 import { TestStepPanel } from './TestStepPanel.jsx';
@@ -30,6 +30,11 @@ export function ExecutionDetailPage({ executionId, onClose }) {
   const [artifacts, setArtifacts] = useState([]);
   const [logs, setLogs] = useState([]);
   const [compExecutions, setCompExecutions] = useState([]);
+
+  // Media (Screenshots & Playwright Video Recordings)
+  const [mediaList, setMediaList] = useState([]);
+  const [mediaFilter, setMediaFilter] = useState('ALL'); // 'ALL' | 'IMAGE' | 'VIDEO'
+  const [activeMediaItem, setActiveMediaItem] = useState(null);
 
   // Filters for test cases tab
   const [tcSearch, setTcSearch] = useState('');
@@ -68,12 +73,13 @@ export function ExecutionDetailPage({ executionId, onClose }) {
   const fetchDetails = async () => {
     setLoading(true);
     try {
-      const [sumData, tcData, artData, logData, execList] = await Promise.all([
+      const [sumData, tcData, artData, logData, execList, mediaData] = await Promise.all([
         api.executionSummary(executionId),
         api.executionTestCases(executionId),
         api.executionArtifacts(executionId),
         api.executionLogs(executionId),
-        api.executions() // to select for comparison
+        api.executions(), // to select for comparison
+        api.screenshotsList({ executionId }).catch(() => [])
       ]);
 
       setSummary(sumData);
@@ -81,6 +87,7 @@ export function ExecutionDetailPage({ executionId, onClose }) {
       setArtifacts(artData);
       setLogs(logData);
       setCompExecutions(execList.filter(e => e.id !== executionId));
+      setMediaList(Array.isArray(mediaData) ? mediaData : []);
     } catch (e) {
       console.error("Error loading execution details", e);
     } finally {
@@ -156,6 +163,33 @@ export function ExecutionDetailPage({ executionId, onClose }) {
   const failedTestCases = testCases.filter(tc => tc.status && tc.status.toUpperCase() === 'FAIL' && !tc.isConfigMethod);
   const screenshotTestCases = testCases.filter(tc => tc.screenshotPath);
 
+  const combinedMedia = useMemo(() => {
+    if (mediaList.length > 0) return mediaList;
+    return screenshotTestCases.map(tc => ({
+      id: tc.id,
+      testCaseId: tc.id,
+      executionId,
+      executionCode: summary?.executionCode,
+      moduleCode: tc.moduleCode,
+      testName: tc.testName || tc.methodName,
+      methodName: tc.methodName,
+      screenshotPath: tc.screenshotPath,
+      failureReason: tc.failureReason,
+      mediaType: 'IMAGE'
+    }));
+  }, [mediaList, screenshotTestCases, executionId, summary]);
+
+  const displayedMedia = useMemo(() => {
+    return combinedMedia.filter(m => {
+      if (mediaFilter === 'IMAGE') return m.mediaType === 'IMAGE';
+      if (mediaFilter === 'VIDEO') return m.mediaType === 'VIDEO';
+      return true;
+    });
+  }, [combinedMedia, mediaFilter]);
+
+  const imageCount = useMemo(() => combinedMedia.filter(m => m.mediaType === 'IMAGE').length, [combinedMedia]);
+  const videoCount = useMemo(() => combinedMedia.filter(m => m.mediaType === 'VIDEO').length, [combinedMedia]);
+
   if (loading && !summary) {
     return (
       <div style={{ padding: '40px', display: 'grid', placeItems: 'center' }}>
@@ -207,7 +241,7 @@ export function ExecutionDetailPage({ executionId, onClose }) {
             { key: 'summary', label: 'Summary', icon: FileText },
             { key: 'testCases', label: `Test Cases (${testCases.filter(t => !t.isConfigMethod).length})`, icon: ChevronRight },
             { key: 'failures', label: `Failures (${failedTestCases.length})`, icon: XCircle, countColor: '#f87171' },
-            { key: 'screenshots', label: `Screenshots (${screenshotTestCases.length})`, icon: ImageIcon },
+            { key: 'screenshots', label: `Media (${combinedMedia.length})`, icon: ImageIcon },
             { key: 'logs', label: `Console Logs (${logs.length})`, icon: Terminal },
             { key: 'artifacts', label: 'Artifacts', icon: Download },
             { key: 'comparison', label: 'Historical Comparison', icon: GitCompare },
@@ -293,15 +327,20 @@ export function ExecutionDetailPage({ executionId, onClose }) {
                           <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)' }}>{art.artifactType}</span>
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                          {art.artifactType === 'EXTENT_REPORT' && (
+                          {(art.artifactType === 'EXTENT_REPORT' || art.artifactType === 'REPORT') && (
                             <a href={`/api/reports/${executionId}/view`} target="_blank" rel="noreferrer" className="secondary-action" style={{ display: 'inline-flex', padding: '6px 8px', minHeight: 'unset' }}>
-                              <ExternalLink size={14} /> Open Report
+                              <ExternalLink size={14} /> Open & See Report
                             </a>
                           )}
                           {art.artifactType === 'VIDEO' && (
-                            <a href={`/uploads/${art.filePath}`} target="_blank" rel="noreferrer" className="secondary-action" style={{ display: 'inline-flex', padding: '6px 8px', minHeight: 'unset' }}>
+                            <button
+                              type="button"
+                              onClick={() => setActiveMediaItem({ screenshotPath: art.filePath, mediaType: 'VIDEO', testName: art.fileName })}
+                              className="secondary-action"
+                              style={{ display: 'inline-flex', padding: '6px 8px', minHeight: 'unset', cursor: 'pointer', gap: '4px', alignItems: 'center' }}
+                            >
                               <Play size={14} /> Play
-                            </a>
+                            </button>
                           )}
                           <a href={`/uploads/${art.filePath}`} download className="secondary-action" style={{ display: 'inline-flex', padding: '6px 8px', minHeight: 'unset' }}>
                             <Download size={14} /> Download
@@ -335,7 +374,7 @@ export function ExecutionDetailPage({ executionId, onClose }) {
                     {summary?.finalReportPath && (
                       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
                         <a href={`/api/reports/${executionId}/view`} target="_blank" rel="noreferrer" className="primary-action" style={{ display: 'inline-flex', gap: '8px' }}>
-                          <ExternalLink size={16} /> Open Extent Report
+                          <ExternalLink size={16} /> {summary?.framework === 'PLAYWRIGHT' ? 'Open Playwright HTML Report' : 'Open HTML Report'}
                         </a>
                       </div>
                     )}
@@ -510,32 +549,103 @@ export function ExecutionDetailPage({ executionId, onClose }) {
             </div>
           )}
 
-          {/* Screenshots Tab */}
+          {/* Media & Screenshots Tab */}
           {activeTab === 'screenshots' && (
-            <Panel title="Failure Screenshots">
-              {screenshotTestCases.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px 0' }}>No screenshots captured during this execution run.</p>
+            <Panel title="Execution Media & Failure Captures">
+              {combinedMedia.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '30px 0' }}>No screenshots or video recordings captured during this execution run.</p>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-                  {screenshotTestCases.map(tc => (
-                    <div key={tc.id} style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-inset)' }}>
-                      <a href={`/uploads/${tc.screenshotPath}`} target="_blank" rel="noreferrer">
-                        <img
-                          src={`/uploads/${tc.screenshotPath}`}
-                          alt={tc.methodName}
-                          style={{ width: '100%', height: '160px', objectFit: 'cover', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
-                        />
-                      </a>
-                      <div style={{ padding: '10px 14px' }}>
-                        <strong style={{ display: 'block', fontSize: '13px', color: 'var(--text-primary)' }}>{tc.methodName}</strong>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{tc.className}</span>
-                        <p style={{ fontSize: '12px', color: 'var(--danger-text)', margin: '6px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                          {tc.failureReason}
-                        </p>
+                <>
+                  <div className="sg-media-tabs" style={{ marginBottom: '18px' }}>
+                    <button
+                      type="button"
+                      className={`sg-media-tab ${mediaFilter === 'ALL' ? 'active' : ''}`}
+                      onClick={() => setMediaFilter('ALL')}
+                    >
+                      All Media ({combinedMedia.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={`sg-media-tab ${mediaFilter === 'IMAGE' ? 'active' : ''}`}
+                      onClick={() => setMediaFilter('IMAGE')}
+                    >
+                      <ImageIcon size={14} /> Screenshots ({imageCount})
+                    </button>
+                    <button
+                      type="button"
+                      className={`sg-media-tab ${mediaFilter === 'VIDEO' ? 'active' : ''}`}
+                      onClick={() => setMediaFilter('VIDEO')}
+                    >
+                      <Play size={14} /> Video Recordings ({videoCount})
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+                    {displayedMedia.map(m => (
+                      <div key={m.id || m.screenshotPath} style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-inset)', display: 'flex', flexDirection: 'column' }}>
+                        {m.mediaType === 'VIDEO' ? (
+                          <div className="sg-video-thumb-card" onClick={() => setActiveMediaItem(m)} style={{ height: '160px' }}>
+                            <div className="sg-play-badge">
+                              <Play size={20} fill="currentColor" />
+                            </div>
+                            <span className="sg-video-indicator">VIDEO RECORDING</span>
+                          </div>
+                        ) : (
+                          <div
+                            style={{ height: '160px', overflow: 'hidden', background: '#000', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+                            onClick={() => setActiveMediaItem(m)}
+                          >
+                            <img
+                              src={`/uploads/${m.screenshotPath}`}
+                              alt={m.methodName}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          </div>
+                        )}
+                        <div style={{ padding: '10px 14px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <div>
+                            <strong style={{ display: 'block', fontSize: '13px', color: 'var(--text-primary)' }}>{m.testName || m.methodName}</strong>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{m.methodName || m.className}</span>
+                            {m.failureReason && (
+                              <p style={{ fontSize: '12px', color: m.mediaType === 'VIDEO' ? 'var(--accent-text)' : 'var(--danger-text)', margin: '6px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                {m.failureReason}
+                              </p>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                            {m.mediaType === 'VIDEO' ? (
+                              <button
+                                type="button"
+                                onClick={() => setActiveMediaItem(m)}
+                                className="primary-action"
+                                style={{ padding: '5px 10px', fontSize: '12px', minHeight: 'unset', width: 'auto', display: 'inline-flex', gap: '5px', alignItems: 'center' }}
+                              >
+                                <Play size={12} fill="currentColor" /> Play
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setActiveMediaItem(m)}
+                                className="secondary-action"
+                                style={{ padding: '5px 10px', fontSize: '12px', minHeight: 'unset', display: 'inline-flex', gap: '5px', alignItems: 'center' }}
+                              >
+                                <ExternalLink size={12} /> View Full
+                              </button>
+                            )}
+                            <a
+                              href={`/uploads/${m.screenshotPath}`}
+                              download
+                              className="secondary-action"
+                              style={{ padding: '5px 10px', fontSize: '12px', minHeight: 'unset', display: 'inline-flex', gap: '5px', alignItems: 'center' }}
+                            >
+                              <Download size={12} /> Download
+                            </a>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </>
               )}
             </Panel>
           )}
@@ -581,15 +691,20 @@ export function ExecutionDetailPage({ executionId, onClose }) {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      {art.artifactType === 'EXTENT_REPORT' && (
+                      {(art.artifactType === 'EXTENT_REPORT' || art.artifactType === 'REPORT') && (
                         <a href={`/api/reports/${executionId}/view`} target="_blank" rel="noreferrer" className="secondary-action" style={{ display: 'inline-flex', padding: '6px 12px', minHeight: 'unset', gap: '6px' }}>
                           <ExternalLink size={14} /> View HTML Report
                         </a>
                       )}
                       {art.artifactType === 'VIDEO' && (
-                        <a href={`/uploads/${art.filePath}`} target="_blank" rel="noreferrer" className="secondary-action" style={{ display: 'inline-flex', padding: '6px 12px', minHeight: 'unset', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setActiveMediaItem({ screenshotPath: art.filePath, mediaType: 'VIDEO', testName: art.fileName })}
+                          className="secondary-action"
+                          style={{ display: 'inline-flex', padding: '6px 12px', minHeight: 'unset', gap: '6px', cursor: 'pointer', alignItems: 'center' }}
+                        >
                           <Play size={14} /> Play Video
-                        </a>
+                        </button>
                       )}
                       <a href={`/uploads/${art.filePath}`} download className="primary-action" style={{ display: 'inline-flex', padding: '6px 12px', minHeight: 'unset', width: 'auto', gap: '6px' }}>
                         <Download size={14} /> Download File
@@ -705,6 +820,83 @@ export function ExecutionDetailPage({ executionId, onClose }) {
           )}
 
         </div>
+
+        {/* Media Preview / Video Player Modal */}
+        {activeMediaItem && (
+          <div
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'grid', placeItems: 'center', padding: '24px' }}
+            onClick={() => setActiveMediaItem(null)}
+          >
+            <div
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', maxWidth: '850px', width: '100%', overflow: 'hidden', padding: '20px', boxShadow: '0 20px 40px rgba(0,0,0,0.6)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="sg-video-indicator" style={{ textTransform: 'uppercase' }}>
+                    {activeMediaItem.mediaType === 'VIDEO' ? 'Playwright Video' : 'Screenshot'}
+                  </span>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {activeMediaItem.testName || activeMediaItem.methodName}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveMediaItem(null)}
+                  style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'grid', placeItems: 'center', padding: '4px', borderRadius: '6px' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {activeMediaItem.mediaType === 'VIDEO' ? (
+                <div className="sg-video-modal-wrap">
+                  <video
+                    controls
+                    autoPlay
+                    className="sg-video-player-el"
+                    src={`/uploads/${activeMediaItem.screenshotPath}`}
+                  >
+                    Your browser does not support HTML5 video playback.
+                  </video>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', placeItems: 'center', background: '#05070c', borderRadius: '8px', padding: '10px', maxHeight: '500px', overflow: 'hidden' }}>
+                  <img
+                    src={`/uploads/${activeMediaItem.screenshotPath}`}
+                    alt={activeMediaItem.methodName || 'Screenshot'}
+                    style={{ maxWidth: '100%', maxHeight: '480px', objectFit: 'contain', borderRadius: '4px' }}
+                  />
+                </div>
+              )}
+
+              <div className="sg-video-modal-footer" style={{ marginTop: '14px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {activeMediaItem.methodName || activeMediaItem.testName}
+                </span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <a
+                    href={`/uploads/${activeMediaItem.screenshotPath}`}
+                    download
+                    className="primary-action"
+                    style={{ width: 'auto', padding: '6px 14px', fontSize: '13px', display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+                  >
+                    <Download size={14} /> Download
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMediaItem(null)}
+                    className="secondary-action"
+                    style={{ padding: '6px 14px', fontSize: '13px' }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

@@ -17,6 +17,9 @@ import {
   Copy,
   Check,
   Wrench,
+  Settings2,
+  Briefcase,
+  Cpu
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { initThemeSync, getStoredThemePref, resolveEffectiveTheme } from '../../../../shared/ui/theme-sync.js';
@@ -24,6 +27,9 @@ import { reportHeightToParent } from '../../../../shared/ui/iframe-resize.js';
 import { api, auth, decodeProjectRoles } from './api.js';
 import { Dashboard } from './components/dashboard/Dashboard.jsx';
 import { AutomationSetupWizard, AutomationSetupPending } from './components/setup/AutomationSetupWizard.jsx';
+import { SettingsView } from './components/settings/SettingsView.jsx';
+import { WorkspaceSettingsView } from './components/settings/WorkspaceSettingsView.jsx';
+import { EngineManagementView } from './components/engines/EngineManagementView.jsx';
 import { EnvironmentView } from './components/environments/EnvironmentView.jsx';
 import { ExecutionCenter } from './components/execution/ExecutionCenter.jsx';
 import { ComparePage } from './components/execution/ComparePage.jsx';
@@ -40,18 +46,31 @@ import { fallbackSummary, USER_NAV } from './constants.js';
 // Attach resolved icon components to nav items (done once at module level)
 const ICON_MAP = {
   Gauge, Play, FileText, TerminalSquare, Camera, Globe2,
-  LayoutDashboard, KeyRound, GitCompare, Wrench
+  LayoutDashboard, KeyRound, GitCompare, Wrench, Settings2,
+  Briefcase, Cpu
 };
-USER_NAV.forEach((item) => { item._icon = ICON_MAP[item.icon]; });
+USER_NAV.forEach((item) => {
+  item._icon = ICON_MAP[item.icon];
+  if (item.children) {
+    item.children.forEach((child) => {
+      child._icon = ICON_MAP[child.icon];
+    });
+  }
+});
 
 // ── Hash routing ──────────────────────────────────────────────────────────────
 // The active tab lives in the URL hash (#/reports) so a page refresh or
 // back/forward keeps the user on the tab they were on.
-const USER_TAB_KEYS = new Set(USER_NAV.map((item) => item.key));
+const USER_TAB_KEYS = new Set([
+  ...USER_NAV.map((item) => item.key),
+  'settings-workspace',
+  'settings-engines'
+]);
 
 const parseHashRoute = () => {
   const [head] = window.location.hash.replace(/^#\/?/, '').split('/');
-  return { active: USER_TAB_KEYS.has(head) ? head : 'dashboard' };
+  const route = USER_TAB_KEYS.has(head) ? head : 'dashboard';
+  return { active: route === 'settings' ? 'settings-workspace' : route };
 };
 
 // ── Error Popup Content ───────────────────────────────────────────────────────
@@ -174,10 +193,12 @@ export function App() {
   // with its own framework path set. Determined in refresh() below, alongside everything else
   // it already loads on boot.
   const [automationSetup, setAutomationSetup] = useState('checking');
-  const isProjectAdmin = useMemo(
-    () => decodeProjectRoles(session?.accessToken).includes('PROJECT_ADMIN'),
-    [session?.accessToken]
-  );
+  const isProjectAdmin = useMemo(() => {
+    const role = session?.user?.role;
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN' || !role) return true;
+    const projectRoles = decodeProjectRoles(session?.accessToken);
+    return projectRoles.includes('PROJECT_ADMIN') || projectRoles.includes('ADMIN');
+  }, [session?.accessToken, session?.user?.role]);
   const [selectedEnv, setSelectedEnv] = useState(1);
   const [selectedModule, setSelectedModule] = useState('LAND');
   const [suiteXmlPath, setSuiteXmlPath] = useState('');
@@ -429,6 +450,19 @@ export function App() {
       {active === 'screenshots' && <ScreenshotsGallery onSelectExecution={setSelectedExecutionId} />}
       {active === 'compare' && <ComparePage executions={executions} modules={modules} />}
       {active === 'environments' && <EnvironmentView onRefresh={refresh} />}
+      {(active === 'settings-workspace' || active === 'settings') && (
+        <WorkspaceSettingsView
+          onNotify={notify}
+          isProjectAdmin={isProjectAdmin}
+        />
+      )}
+      {active === 'settings-engines' && (
+        <EngineManagementView
+          onNotify={notify}
+          isProjectAdmin={isProjectAdmin}
+          onNavigateToSetup={() => setActive('automation-setup')}
+        />
+      )}
       {selectedExecutionId && (
         <ExecutionDetailPage
           executionId={selectedExecutionId}

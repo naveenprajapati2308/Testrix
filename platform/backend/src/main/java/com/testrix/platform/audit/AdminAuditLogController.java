@@ -20,6 +20,7 @@ public class AdminAuditLogController {
         this.repository = repository;
     }
 
+
     @GetMapping
     public ApiResponse<List<AuditLogDto>> recent() {
         return ApiResponse.ok(repository.findTop20ByOrderByCreatedAtDesc().stream().map(AuditLogDto::from).toList());

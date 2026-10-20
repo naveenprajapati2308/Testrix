@@ -12,7 +12,14 @@ public final class TestEngineDtos {
         DeploymentType deploymentType,
         String endpoint,
         String frameworkPath,
-        String reportPath
+        String reportPath,
+        SourceType sourceType,
+        String gitRepoUrl,
+        String gitBranch,
+        GitAuthType gitAuthType,
+        String gitToken,
+        String gitUsername,
+        String localAgentId
     ) {}
 
     public record UpdateRequest(
@@ -21,7 +28,14 @@ public final class TestEngineDtos {
         DeploymentType deploymentType,
         String endpoint,
         String frameworkPath,
-        String reportPath
+        String reportPath,
+        SourceType sourceType,
+        String gitRepoUrl,
+        String gitBranch,
+        GitAuthType gitAuthType,
+        String gitToken,
+        String gitUsername,
+        String localAgentId
     ) {}
 
     public record Summary(
@@ -34,6 +48,15 @@ public final class TestEngineDtos {
         String endpoint,
         String frameworkPath,
         String reportPath,
+        SourceType sourceType,
+        String gitRepoUrl,
+        String gitBranch,
+        GitAuthType gitAuthType,
+        String gitTokenMasked,
+        boolean hasGitToken,
+        String gitUsername,
+        String localAgentId,
+        String localAgentStatus,
         EngineStatus status,
         String health,
         Instant lastHeartbeatAt,
@@ -41,9 +64,20 @@ public final class TestEngineDtos {
         Instant createdAt
     ) {
         public static Summary from(TestEngine e, String activeKeyPrefix) {
+            return from(e, activeKeyPrefix, null);
+        }
+
+        public static Summary from(TestEngine e, String activeKeyPrefix, String maskedGitToken) {
+            boolean hasToken = e.getGitTokenEncrypted() != null && !e.getGitTokenEncrypted().isBlank();
             return new Summary(
                 e.getId(), e.getBusinessId(), e.getEngineType(), e.getName(), e.getDescription(),
-                e.getDeploymentType(), e.getEndpoint(), e.getFrameworkPath(), e.getReportPath(), e.getStatus(), health(e),
+                e.getDeploymentType(), e.getEndpoint(), e.getFrameworkPath(), e.getReportPath(),
+                e.getSourceType() != null ? e.getSourceType() : SourceType.LOCAL_DEV,
+                e.getGitRepoUrl(), e.getGitBranch() != null ? e.getGitBranch() : "main",
+                e.getGitAuthType() != null ? e.getGitAuthType() : GitAuthType.NONE,
+                maskedGitToken, hasToken, e.getGitUsername(),
+                e.getLocalAgentId(), e.getLocalAgentStatus(),
+                e.getStatus(), health(e),
                 e.getLastHeartbeatAt(), activeKeyPrefix, e.getCreatedAt()
             );
         }
@@ -67,4 +101,21 @@ public final class TestEngineDtos {
      * guessed server-side, so it's correct regardless of hostname/port the workspace actually uses.
      */
     public record StarterKitRequest(String apiKey, String portalUrl) {}
+
+    public record TestGitConnectionRequest(
+        String gitRepoUrl,
+        String gitBranch,
+        GitAuthType gitAuthType,
+        String gitToken,
+        String gitUsername
+    ) {}
+
+    public record TestGitConnectionResult(
+        boolean success,
+        String message,
+        String branch,
+        int exitCode
+    ) {}
+
+    public record VerifyFolderRequest(String frameworkPath) {}
 }

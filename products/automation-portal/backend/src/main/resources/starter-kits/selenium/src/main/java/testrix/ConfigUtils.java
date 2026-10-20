@@ -19,9 +19,17 @@ public final class ConfigUtils {
     private static Properties load() {
         Properties props = new Properties();
         try (InputStream in = ConfigUtils.class.getClassLoader().getResourceAsStream("config-v2.properties")) {
-            if (in != null) props.load(in);
-        } catch (IOException e) {
-            System.err.println("[Testrix] Could not read config-v2.properties: " + e.getMessage());
+            if (in != null) {
+                props.load(in);
+                return props;
+            }
+        } catch (IOException ignored) {}
+
+        java.io.File file = new java.io.File("config-v2.properties");
+        if (file.exists()) {
+            try (InputStream in = new java.io.FileInputStream(file)) {
+                props.load(in);
+            } catch (IOException ignored) {}
         }
         return props;
     }

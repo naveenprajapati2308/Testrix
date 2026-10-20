@@ -10,7 +10,9 @@ import {
   FolderTree,
   Gauge, GitCompare, Globe2, History, LayoutDashboard, ListChecks, LogOut, Monitor, Moon, Package, Play, Settings, Sparkles, Sun, Table2, TerminalSquare, UserCircle,
   Users,
-  Workflow
+  Workflow,
+  Briefcase,
+  Cpu
 } from 'lucide-react';
 import { GlobalSearchDropdown } from '../../search/components/GlobalSearchDropdown.jsx';
 import { SIDEBAR_NAV, NAV_MODULE_REQUIREMENT } from '../../constants.js';
@@ -22,7 +24,7 @@ import testrixLogo from '../../assets/testrix_logo.png';
 const NAV_ICON_MAP = {
   LayoutDashboard, Play, Globe2, Gauge, UserCircle, FileText, TerminalSquare, Camera, GitCompare,
   Database, Workflow, CalendarClock, History, FolderTree, Package, Users, Settings, BookOpen,
-  Sparkles, Table2, ListChecks
+  Sparkles, Table2, ListChecks, Briefcase, Cpu
 };
 
 // ── Layout: Sidebar ─────────────────────────────────────────────────────────
@@ -54,17 +56,23 @@ export function Sidebar({
     })
     : SIDEBAR_NAV;
 
-  // "Team Management" + "Workspace Settings" are Project-Admin-only, inserted just before Profile.
+  // Global "Settings" central control menu and "Team Management", inserted just before Profile.
   const navItems = [...visibleNav];
-  if (project?.roles?.includes('PROJECT_ADMIN')) {
-    const profileIdx = navItems.findIndex((i) => i.key === 'profile');
-    const teamItem = { key: 'team', label: 'Team Management', icon: 'Users' };
-    const settingsItem = { key: 'workspace-settings', label: 'Workspace Settings', icon: 'Settings' };
-    if (profileIdx >= 0) {
-      navItems.splice(profileIdx, 0, settingsItem, teamItem);
-    } else {
-      navItems.push(settingsItem, teamItem);
-    }
+  const profileIdx = navItems.findIndex((i) => i.key === 'profile');
+  const teamItem = { key: 'team', label: 'Team Management', icon: 'Users' };
+  const settingsItem = {
+    key: 'settings',
+    label: 'Settings',
+    icon: 'Settings',
+    children: [
+      { key: 'workspace-settings', label: 'Workspace Settings', icon: 'Briefcase' },
+      { key: 'automation-settings', label: 'Automation Settings', icon: 'Cpu' }
+    ]
+  };
+  if (profileIdx >= 0) {
+    navItems.splice(profileIdx, 0, settingsItem, teamItem);
+  } else {
+    navItems.push(settingsItem, teamItem);
   }
 
   // ── Collapsed mode: hover tooltip and click submenu dropdown state ────────
@@ -172,15 +180,70 @@ export function Sidebar({
                 </button>
                 {isExpanded && (
                   <div className="nav-submenu">
-                    {children.map((child) => (
-                      <button
-                        key={child.key}
-                        className={activeChildKey === child.key ? 'active' : ''}
-                        onClick={() => onNavigateChild(item.key, child.key)}
-                      >
-                        {child.label}
-                      </button>
-                    ))}
+                    {children.map((child) => {
+                      if (child.children && child.children.length > 0) {
+                        const isSubChildActive = child.children.some((c) => c.key === activeChildKey) || activeChildKey === child.key;
+                        const subGroupKey = `${item.key}:${child.key}`;
+                        const isSubOpen = expandedKeys[subGroupKey] ?? true;
+                        return (
+                          <div key={child.key} style={{ display: 'flex', flexDirection: 'column', width: '100%', marginTop: '3px' }}>
+                            <button
+                              type="button"
+                              className={`nav-sub-parent-btn ${isSubChildActive ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedKeys((k) => ({ ...k, [subGroupKey]: !isSubOpen }));
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                width: '100%',
+                                padding: '6px 10px',
+                                background: 'transparent',
+                                border: 'none',
+                                color: isSubChildActive ? 'var(--sidebar-active-text, #fff)' : 'var(--sidebar-item, #94a3b8)',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <span>{child.label}</span>
+                              <ChevronDown
+                                size={12}
+                                style={{
+                                  transform: isSubOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                                  transition: 'transform 0.15s ease'
+                                }}
+                              />
+                            </button>
+                            {isSubOpen && (
+                              <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '10px', borderLeft: '1px solid var(--sidebar-edge, rgba(255,255,255,0.08))', marginLeft: '10px', marginTop: '2px', gap: '2px' }}>
+                                {child.children.map((subChild) => (
+                                  <button
+                                    key={subChild.key}
+                                    className={activeChildKey === subChild.key ? 'active' : ''}
+                                    onClick={() => onNavigateChild(item.key, subChild.key)}
+                                    style={{ fontSize: '12px', padding: '5px 8px', height: '30px', minHeight: '30px' }}
+                                  >
+                                    {subChild.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return (
+                        <button
+                          key={child.key}
+                          className={activeChildKey === child.key ? 'active' : ''}
+                          onClick={() => onNavigateChild(item.key, child.key)}
+                        >
+                          {child.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -382,7 +445,7 @@ export function Sidebar({
           <div className="nav-collapsed-flyout">
             <div className="nav-collapsed-flyout-title">{openSubmenu.label}</div>
             <div className="nav-collapsed-flyout-list">
-              {openSubmenu.children.map((child) => (
+              {openSubmenu.children.flatMap((child) => child.children ? child.children : [child]).map((child) => (
                 <button
                   key={child.key}
                   className={activeChildKey === child.key ? 'active' : ''}

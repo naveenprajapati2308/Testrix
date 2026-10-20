@@ -18,7 +18,10 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Play,
+  Layers,
+  Download
 } from 'lucide-react';
 import './screenshots.css';
 
@@ -43,8 +46,10 @@ export function ScreenshotsGallery({ onSelectExecution }) {
   const [searchExecutionCode, setSearchExecutionCode] = useState('');
   const [keyword, setKeyword] = useState('');
   const [moduleFilter, setModuleFilter] = useState('');
+  const [mediaTypeFilter, setMediaTypeFilter] = useState('ALL');
   const [sortOrder, setSortOrder] = useState('latest');
   const [activeImage, setActiveImage] = useState(null);
+  const [activeVideo, setActiveVideo] = useState(null);
   const [viewMode, setViewMode] = useState('gallery');
 
   // Delete flow
@@ -81,6 +86,8 @@ export function ScreenshotsGallery({ onSelectExecution }) {
     const kw = keyword.trim().toLowerCase();
     const code = searchExecutionCode.trim().toLowerCase();
     const list = screenshots.filter(s => {
+      if (mediaTypeFilter === 'IMAGE' && s.mediaType === 'VIDEO') return false;
+      if (mediaTypeFilter === 'VIDEO' && s.mediaType !== 'VIDEO') return false;
       if (code && !(s.executionCode || '').toLowerCase().includes(code)) return false;
       if (moduleFilter && s.moduleCode !== moduleFilter) return false;
       if (kw) {
@@ -94,10 +101,10 @@ export function ScreenshotsGallery({ onSelectExecution }) {
       const tb = new Date(b.createdAt || 0).getTime();
       return sortOrder === 'latest' ? tb - ta : ta - tb;
     });
-  }, [screenshots, searchExecutionCode, keyword, moduleFilter, sortOrder]);
+  }, [screenshots, searchExecutionCode, keyword, moduleFilter, mediaTypeFilter, sortOrder]);
 
   // Reset to first page whenever filters change the result set
-  useEffect(() => { setPage(1); }, [searchExecutionCode, keyword, moduleFilter, sortOrder, pageSize]);
+  useEffect(() => { setPage(1); }, [searchExecutionCode, keyword, moduleFilter, mediaTypeFilter, sortOrder, pageSize]);
 
   const totalRecords = filteredScreenshots.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
@@ -118,13 +125,15 @@ export function ScreenshotsGallery({ onSelectExecution }) {
   const handleDelete = async () => {
     if (!confirmDelete) return;
     setDeleting(true);
+    const idToDelete = confirmDelete.id || confirmDelete.testCaseId;
     try {
-      await api.deleteScreenshot(confirmDelete.testCaseId);
-      setScreenshots((prev) => prev.filter((s) => s.testCaseId !== confirmDelete.testCaseId));
-      if (activeImage?.testCaseId === confirmDelete.testCaseId) setActiveImage(null);
+      await api.deleteScreenshot(idToDelete);
+      setScreenshots((prev) => prev.filter((s) => (s.id || s.testCaseId) !== idToDelete));
+      if ((activeImage?.id || activeImage?.testCaseId) === idToDelete) setActiveImage(null);
+      if ((activeVideo?.id || activeVideo?.testCaseId) === idToDelete) setActiveVideo(null);
       setConfirmDelete(null);
     } catch (e) {
-      alert("Failed to delete screenshot: " + e.message);
+      alert("Failed to delete media: " + e.message);
     } finally {
       setDeleting(false);
     }
@@ -133,8 +142,16 @@ export function ScreenshotsGallery({ onSelectExecution }) {
   const columns = useMemo(() => [
     {
       key: 'screenshotPath',
-      label: 'Image',
-      render: (val, shot) => (
+      label: 'Media',
+      render: (val, shot) => shot.mediaType === 'VIDEO' ? (
+        <div
+          className="sg-table-video-thumb"
+          onClick={() => setActiveVideo(shot)}
+          title="Play video recording"
+        >
+          <Play size={16} fill="currentColor" />
+        </div>
+      ) : (
         <img
           src={`/uploads/${val}`}
           alt={shot.methodName}
@@ -181,7 +198,28 @@ export function ScreenshotsGallery({ onSelectExecution }) {
 
       {/* Filters */}
       <div className="sg-card">
-        <h3 className="sg-card-title sg-title-violet"><Filter size={17} /> Filter Screenshots</h3>
+        <h3 className="sg-card-title sg-title-violet"><Filter size={17} /> Filter Media</h3>
+        <div className="sg-media-tabs">
+          <button
+            className={`sg-media-tab${mediaTypeFilter === 'ALL' ? ' active' : ''}`}
+            onClick={() => setMediaTypeFilter('ALL')}
+          >
+            <Layers size={14} /> All Media ({screenshots.length})
+          </button>
+          <button
+            className={`sg-media-tab${mediaTypeFilter === 'IMAGE' ? ' active' : ''}`}
+            onClick={() => setMediaTypeFilter('IMAGE')}
+          >
+            <ImageIcon size={14} /> Screenshots ({screenshots.filter(s => s.mediaType !== 'VIDEO').length})
+          </button>
+          <button
+            className={`sg-media-tab${mediaTypeFilter === 'VIDEO' ? ' active' : ''}`}
+            onClick={() => setMediaTypeFilter('VIDEO')}
+          >
+            <Play size={14} /> Videos ({screenshots.filter(s => s.mediaType === 'VIDEO').length})
+          </button>
+        </div>
+
         <div className="sg-filter-row">
           <div className="sg-search-wrap">
             <Search size={15} />
@@ -238,7 +276,7 @@ export function ScreenshotsGallery({ onSelectExecution }) {
       <div className="sg-card">
         <div className="sg-gallery-head">
           <h3 className="sg-card-title sg-title-pink" style={{ margin: 0 }}>
-            <ImageIcon size={17} /> {viewMode === 'gallery' ? 'Failure Screenshots Gallery' : 'Failure Screenshots List'}
+            <ImageIcon size={17} /> {viewMode === 'gallery' ? 'Media & Failure Gallery' : 'Media List'}
           </h3>
           {viewMode === 'gallery' && (
             <label className="sg-sort">
@@ -253,60 +291,73 @@ export function ScreenshotsGallery({ onSelectExecution }) {
 
         {loading ? (
           <div style={{ display: 'grid', placeItems: 'center', padding: '48px 0' }}>
-            <Loader size={44} label="Loading screenshots..." />
+            <Loader size={44} label="Loading media..." />
           </div>
         ) : filteredScreenshots.length === 0 ? (
           <div className="sg-empty">
             <Camera size={44} />
-            <strong>No screenshots found</strong>
-            <span>Failure screenshots from your test runs will appear here.</span>
+            <strong>No media found</strong>
+            <span>Failure screenshots and execution videos from your test runs will appear here.</span>
           </div>
         ) : viewMode === 'gallery' ? (
           <>
             <div className="sg-grid">
-              {pagedScreenshots.map((shot) => (
-                <div key={shot.testCaseId} className="sg-shot-card">
-                  <div className="sg-thumb">
-                    <img
-                      src={`/uploads/${shot.screenshotPath}`}
-                      alt={shot.methodName}
-                      onClick={() => setActiveImage(shot)}
-                    />
-                    <button
-                      className="sg-delete-btn"
-                      title="Delete screenshot"
-                      onClick={() => setConfirmDelete(shot)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-
-                  <div className="sg-shot-body">
-                    <strong className="sg-shot-title" title={shot.methodName}>{shot.methodName}</strong>
-                    <div className="sg-shot-meta">
-                      <span className="sg-meta-item">
-                        <Calendar size={13} />
-                        <button className="sg-code-link" onClick={() => onSelectExecution(shot.executionId)}>
-                          {shot.executionCode}
-                        </button>
-                      </span>
-                      <span className="sg-meta-item">
-                        <Clock size={13} /> {fmtTime(shot.createdAt)}
-                      </span>
+              {pagedScreenshots.map((shot) => {
+                const itemKey = shot.id || shot.testCaseId || shot.screenshotPath;
+                const isVideo = shot.mediaType === 'VIDEO';
+                return (
+                  <div key={itemKey} className="sg-shot-card">
+                    <div className="sg-thumb">
+                      {isVideo ? (
+                        <div className="sg-video-thumb-card" onClick={() => setActiveVideo(shot)}>
+                          <div className="sg-play-badge">
+                            <Play size={22} fill="currentColor" />
+                          </div>
+                          <span className="sg-video-indicator">VIDEO RECORDING</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={`/uploads/${shot.screenshotPath}`}
+                          alt={shot.methodName}
+                          onClick={() => setActiveImage(shot)}
+                        />
+                      )}
+                      <button
+                        className="sg-delete-btn"
+                        title="Delete media"
+                        onClick={() => setConfirmDelete(shot)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                    <span className={chipClass(shot.moduleCode)}>{shot.moduleCode || 'All Modules'}</span>
-                    {shot.failureReason && (
-                      <p className="sg-fail-reason" title={shot.failureReason}>{shot.failureReason}</p>
-                    )}
+
+                    <div className="sg-shot-body">
+                      <strong className="sg-shot-title" title={shot.methodName}>{shot.methodName}</strong>
+                      <div className="sg-shot-meta">
+                        <span className="sg-meta-item">
+                          <Calendar size={13} />
+                          <button className="sg-code-link" onClick={() => onSelectExecution(shot.executionId)}>
+                            {shot.executionCode}
+                          </button>
+                        </span>
+                        <span className="sg-meta-item">
+                          <Clock size={13} /> {fmtTime(shot.createdAt)}
+                        </span>
+                      </div>
+                      <span className={chipClass(shot.moduleCode)}>{shot.moduleCode || 'All Modules'}</span>
+                      {shot.failureReason && (
+                        <p className="sg-fail-reason" title={shot.failureReason}>{shot.failureReason}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Pagination footer — hidden entirely when there aren't enough records to paginate */}
             {totalRecords > 5 && (
               <div className="sg-footer">
-                <span>Showing {startRecord} to {endRecord} of {totalRecords} screenshots</span>
+                <span>Showing {startRecord} to {endRecord} of {totalRecords} media items</span>
                 <div className="sg-pager">
                   <span>Show:</span>
                   <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
@@ -344,21 +395,21 @@ export function ScreenshotsGallery({ onSelectExecution }) {
           <DataTable
             columns={columns}
             data={filteredScreenshots}
-            searchPlaceholder="Filter screenshots..."
-            exportFilename="failure_screenshots.csv"
+            searchPlaceholder="Filter media..."
+            exportFilename="failure_media.csv"
           />
         )}
       </div>
 
       {/* Delete confirmation */}
       {confirmDelete && (
-        <Modal title="Delete Screenshot" onClose={() => setConfirmDelete(null)}>
+        <Modal title="Delete Media" onClose={() => setConfirmDelete(null)}>
           <div className="sg-confirm-body">
             <AlertTriangle size={38} />
             <p className="sg-confirm-text">
-              Are you sure you want to delete this screenshot?<br />
+              Are you sure you want to delete this media item?<br />
               <code>{confirmDelete.methodName}</code> — {confirmDelete.executionCode}<br />
-              This will permanently remove the image file.
+              This will permanently remove the file from disk.
             </p>
             <div className="sg-confirm-actions">
               <button className="sg-btn-cancel" onClick={() => setConfirmDelete(null)} disabled={deleting}>
@@ -367,6 +418,42 @@ export function ScreenshotsGallery({ onSelectExecution }) {
               <button className="sg-btn-delete" onClick={handleDelete} disabled={deleting}>
                 {deleting ? 'Deleting…' : 'Yes, Delete'}
               </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Video Player Modal */}
+      {activeVideo && (
+        <Modal
+          title={`Execution Video — ${activeVideo.methodName || activeVideo.executionCode}`}
+          onClose={() => setActiveVideo(null)}
+          width="820px"
+        >
+          <div className="sg-video-modal-wrap">
+            <video
+              src={`/uploads/${activeVideo.screenshotPath}`}
+              controls
+              autoPlay
+              className="sg-video-player-el"
+            />
+            <div className="sg-video-modal-footer">
+              <div>
+                <strong style={{ fontSize: '14px', color: 'var(--text-primary)', display: 'block' }}>
+                  {activeVideo.testName}
+                </strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Execution: <button className="sg-code-link" onClick={() => { setActiveVideo(null); onSelectExecution(activeVideo.executionId); }}>{activeVideo.executionCode}</button>
+                </span>
+              </div>
+              <a
+                href={`/uploads/${activeVideo.screenshotPath}`}
+                download
+                className="sg-media-tab active"
+                style={{ textDecoration: 'none' }}
+              >
+                <Download size={14} /> Download Video (.webm)
+              </a>
             </div>
           </div>
         </Modal>

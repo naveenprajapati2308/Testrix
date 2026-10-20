@@ -77,6 +77,27 @@ public class ExecutionJob {
     @Column(name = "framework_path", length = 500)
     private String frameworkPath;
 
+    @Column(name = "source_type", length = 30)
+    private String sourceType = "LOCAL_DEV";
+
+    @Column(name = "git_repo_url", length = 500)
+    private String gitRepoUrl;
+
+    @Column(name = "git_branch", length = 100)
+    private String gitBranch;
+
+    @Column(name = "git_auth_type", length = 30)
+    private String gitAuthType;
+
+    @Column(name = "git_token_encrypted", columnDefinition = "TEXT")
+    private String gitToken;
+
+    @Column(name = "git_username", length = 100)
+    private String gitUsername;
+
+    @Column(name = "local_agent_id", length = 100)
+    private String localAgentId;
+
     // Getters and Setters
     public String getJobId() { return jobId; }
     public void setJobId(String jobId) { this.jobId = jobId; }
@@ -137,4 +158,25 @@ public class ExecutionJob {
 
     public String getFrameworkPath() { return frameworkPath; }
     public void setFrameworkPath(String frameworkPath) { this.frameworkPath = frameworkPath; }
+
+    public String getSourceType() { return sourceType; }
+    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+
+    public String getGitRepoUrl() { return gitRepoUrl; }
+    public void setGitRepoUrl(String gitRepoUrl) { this.gitRepoUrl = gitRepoUrl; }
+
+    public String getGitBranch() { return gitBranch; }
+    public void setGitBranch(String gitBranch) { this.gitBranch = gitBranch; }
+
+    public String getGitAuthType() { return gitAuthType; }
+    public void setGitAuthType(String gitAuthType) { this.gitAuthType = gitAuthType; }
+
+    public String getGitToken() { return gitToken; }
+    public void setGitToken(String gitToken) { this.gitToken = gitToken; }
+
+    public String getGitUsername() { return gitUsername; }
+    public void setGitUsername(String gitUsername) { this.gitUsername = gitUsername; }
+
+    public String getLocalAgentId() { return localAgentId; }
+    public void setLocalAgentId(String localAgentId) { this.localAgentId = localAgentId; }
 }

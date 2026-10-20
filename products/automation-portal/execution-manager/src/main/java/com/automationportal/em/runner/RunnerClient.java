@@ -22,6 +22,14 @@ public class RunnerClient {
     }
 
     public boolean triggerRun(String runnerUrl, String executionId, String suiteXml, String portalUrl, String apiKey, String envConfigJson, String framework, String browser, String tagFilter, String frameworkPath) {
+        return triggerRun(runnerUrl, executionId, suiteXml, portalUrl, apiKey, envConfigJson, framework, browser, tagFilter, frameworkPath,
+                "LOCAL_DEV", "", "main", "NONE", "", "", "");
+    }
+
+    public boolean triggerRun(String runnerUrl, String executionId, String suiteXml, String portalUrl, String apiKey,
+                              String envConfigJson, String framework, String browser, String tagFilter, String frameworkPath,
+                              String sourceType, String gitRepoUrl, String gitBranch, String gitAuthType, String gitToken,
+                              String gitUsername, String localAgentId) {
         try {
             String url = runnerUrl + "/runner/run";
             // envConfigJson is already a JSON object (or null) — embedded raw, not as a string field.
@@ -30,21 +38,29 @@ public class RunnerClient {
             String browserVal = browser == null ? "" : browser;
             String tagFilterVal = tagFilter == null ? "" : tagFilter;
             String frameworkPathVal = frameworkPath == null ? "" : frameworkPath;
+            String sourceTypeVal = (sourceType == null || sourceType.isBlank()) ? "LOCAL_DEV" : sourceType;
+            String gitRepoUrlVal = gitRepoUrl == null ? "" : gitRepoUrl;
+            String gitBranchVal = (gitBranch == null || gitBranch.isBlank()) ? "main" : gitBranch;
+            String gitAuthTypeVal = (gitAuthType == null || gitAuthType.isBlank()) ? "NONE" : gitAuthType;
+            String gitTokenVal = gitToken == null ? "" : gitToken;
+            String gitUsernameVal = gitUsername == null ? "" : gitUsername;
+            String localAgentIdVal = localAgentId == null ? "" : localAgentId;
+
             // JSON body
             String jsonBody = String.format(
-                    "{\"executionId\":\"%s\",\"suiteXml\":\"%s\",\"portalUrl\":\"%s\",\"apiKey\":\"%s\",\"openReport\":false,\"framework\":\"%s\",\"browser\":\"%s\",\"tagFilter\":\"%s\",\"frameworkPath\":\"%s\",\"envConfig\":%s}",
-                    executionId, suiteXml, portalUrl, apiKey, frameworkVal, browserVal, tagFilterVal, frameworkPathVal, envConfig
+                    "{\"executionId\":\"%s\",\"suiteXml\":\"%s\",\"portalUrl\":\"%s\",\"apiKey\":\"%s\",\"openReport\":false,\"framework\":\"%s\",\"browser\":\"%s\",\"tagFilter\":\"%s\",\"frameworkPath\":\"%s\",\"sourceType\":\"%s\",\"gitRepoUrl\":\"%s\",\"gitBranch\":\"%s\",\"gitAuthType\":\"%s\",\"gitToken\":\"%s\",\"gitUsername\":\"%s\",\"localAgentId\":\"%s\",\"envConfig\":%s}",
+                    executionId, suiteXml, portalUrl, apiKey, frameworkVal, browserVal, tagFilterVal, frameworkPathVal,
+                    sourceTypeVal, gitRepoUrlVal, gitBranchVal, gitAuthTypeVal, gitTokenVal, gitUsernameVal, localAgentIdVal, envConfig
             );
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-  
                     .timeout(Duration.ofSeconds(30))
                     .build();
 
-            log.info("Sending run request to runner: {} with body: {}", url, jsonBody);
+            log.info("Sending run request to runner: {} with sourceType: {}", url, sourceTypeVal);
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             log.info("Runner response: status={}, body={}", response.statusCode(), response.body());
 

@@ -193,7 +193,7 @@ export function ReportsCenter({ onSelectExecution }) {
                 target="_blank"
                 rel="noreferrer"
                 className="rc-act-btn"
-                title="Open Extent Report"
+                title={report.framework === 'PLAYWRIGHT' ? "Open Playwright HTML Report" : "Open HTML Report"}
               >
                 <ExternalLink size={14} />
               </a>

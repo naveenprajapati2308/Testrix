@@ -53,6 +53,7 @@ public class ExecutionWorker {
     private final EnvironmentRepository environmentRepository;
     private final ModuleEnvironmentRepository moduleEnvironmentRepository;
     private final TestEngineRepository testEngineRepository;
+    private final com.automationportal.security.EncryptionService encryptionService;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -70,7 +71,8 @@ public class ExecutionWorker {
                            TestNGXmlParser testNGXmlParser,
                            EnvironmentRepository environmentRepository,
                            ModuleEnvironmentRepository moduleEnvironmentRepository,
-                           TestEngineRepository testEngineRepository) {
+                           TestEngineRepository testEngineRepository,
+                           com.automationportal.security.EncryptionService encryptionService) {
         this.executionRepository = executionRepository;
         this.artifactRepository = artifactRepository;
         this.logRepository = logRepository;
@@ -83,6 +85,7 @@ public class ExecutionWorker {
         this.environmentRepository = environmentRepository;
         this.moduleEnvironmentRepository = moduleEnvironmentRepository;
         this.testEngineRepository = testEngineRepository;
+        this.encryptionService = encryptionService;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
@@ -123,8 +126,13 @@ public class ExecutionWorker {
                     .findByCodeAndRunnerType(execution.getModuleCode().toUpperCase(), execution.getFramework());
             if (moduleOpt.isPresent() && moduleOpt.get().getTestEngineId() != null) {
                 TestEngine engine = testEngineRepository.findById(moduleOpt.get().getTestEngineId()).orElse(null);
-                if (engine != null && engine.getFrameworkPath() != null && !engine.getFrameworkPath().isBlank()) {
-                    return engine.getFrameworkPath();
+                if (engine != null) {
+                    if (engine.getSourceType() == com.automationportal.testengine.SourceType.GIT_REMOTE) {
+                        return "GIT_REMOTE_EXEC_" + execution.getId();
+                    }
+                    if (engine.getFrameworkPath() != null && !engine.getFrameworkPath().isBlank()) {
+                        return engine.getFrameworkPath();
+                    }
                 }
             }
         }
@@ -244,12 +252,32 @@ public class ExecutionWorker {
             // own project-specific framework directory (under PROJECT_FRAMEWORKS_ROOT) instead of
             // the one static, shared checkout — null/blank preserves today's legacy behavior.
             String frameworkPath = engine != null ? engine.getFrameworkPath() : null;
+
+            String sourceType = engine != null && engine.getSourceType() != null ? engine.getSourceType().name() : "LOCAL_DEV";
+            String gitRepoUrl = engine != null ? engine.getGitRepoUrl() : null;
+            String gitBranch = engine != null && engine.getGitBranch() != null ? engine.getGitBranch() : "main";
+            String gitAuthType = engine != null && engine.getGitAuthType() != null ? engine.getGitAuthType().name() : "NONE";
+            String gitToken = null;
+            if (engine != null && engine.getGitTokenEncrypted() != null && !engine.getGitTokenEncrypted().isBlank()) {
+                try {
+                    gitToken = encryptionService.decrypt(engine.getGitTokenEncrypted());
+                } catch (Exception e) {
+                    log.error("Failed to decrypt git token for engine: {}", engine.getId(), e);
+                }
+            }
+            String gitUsername = engine != null ? engine.getGitUsername() : null;
+            String localAgentId = engine != null ? engine.getLocalAgentId() : null;
+
             // Map request payload matching EM ExecutionJob entity
             String jsonPayload = String.format(
-                    "{\"jobId\":\"%s\",\"executionId\":%d,\"suiteXml\":\"%s\",\"framework\":\"%s\",\"browser\":\"%s\",\"priority\":\"MEDIUM\",\"maxRetries\":0,\"timeoutMinutes\":%d,\"submittedBy\":\"admin\",\"envConfigJson\":%s,\"tagFilter\":%s,\"testEngineCode\":%s,\"frameworkPath\":%s}",
+                    "{\"jobId\":\"%s\",\"executionId\":%d,\"suiteXml\":\"%s\",\"framework\":\"%s\",\"browser\":\"%s\",\"priority\":\"MEDIUM\",\"maxRetries\":0,\"timeoutMinutes\":%d,\"submittedBy\":\"admin\",\"envConfigJson\":%s,\"tagFilter\":%s,\"testEngineCode\":%s,\"frameworkPath\":%s,\"sourceType\":%s,\"gitRepoUrl\":%s,\"gitBranch\":%s,\"gitAuthType\":%s,\"gitToken\":%s,\"gitUsername\":%s,\"localAgentId\":%s}",
                     execution.getExecutionCode(), execution.getId(), xmlFileName, framework, browser, timeoutMinutes,
                     objectMapper.writeValueAsString(envConfigJson), objectMapper.writeValueAsString(execution.getTagFilter()),
-                    objectMapper.writeValueAsString(testEngineCode), objectMapper.writeValueAsString(frameworkPath)
+                    objectMapper.writeValueAsString(testEngineCode), objectMapper.writeValueAsString(frameworkPath),
+                    objectMapper.writeValueAsString(sourceType), objectMapper.writeValueAsString(gitRepoUrl),
+                    objectMapper.writeValueAsString(gitBranch), objectMapper.writeValueAsString(gitAuthType),
+                    objectMapper.writeValueAsString(gitToken), objectMapper.writeValueAsString(gitUsername),
+                    objectMapper.writeValueAsString(localAgentId)
             );
 
             HttpRequest request = HttpRequest.newBuilder()
@@ -402,9 +430,8 @@ public class ExecutionWorker {
         }
     }
 
-    /** Playwright's counterpart to copyExecutionArtifacts(): no TestNG XML to parse, just walks
-     *  test-results/ and records through the same saveArtifactRecord(), so the Artifacts tab
-     *  needs no per-framework branching. */
+    /** Playwright's counterpart to copyExecutionArtifacts(): copies playwright-report,
+     *  parses test-results/results.json, and synchronizes screenshots/videos. */
     public void copyPlaywrightArtifacts(Execution execution) {
         try {
             String playwrightPath = resolvePlaywrightPath(execution);
@@ -415,46 +442,202 @@ public class ExecutionWorker {
             String artifactsRoot = properties.getArtifactsRoot();
             String executionCode = execution.getExecutionCode();
 
-            Path testResultsDir = Path.of(playwrightPath, "test-results");
-            if (!Files.exists(testResultsDir)) {
-                log.warn("No Playwright test-results directory found at {} for execution: {}", testResultsDir, executionCode);
-                return;
-            }
-
             Path artifactBaseDir = Path.of(artifactsRoot, "executions", executionCode);
             Files.createDirectories(artifactBaseDir.resolve("screenshots"));
             Files.createDirectories(artifactBaseDir.resolve("videos"));
             Files.createDirectories(artifactBaseDir.resolve("traces"));
+            Files.createDirectories(artifactBaseDir.resolve("reports"));
 
-            List<Path> files;
-            try (Stream<Path> walk = Files.walk(testResultsDir)) {
-                files = walk.filter(Files::isRegularFile).collect(Collectors.toList());
-            }
-
-            for (Path src : files) {
-                String name = src.getFileName().toString();
-                String subDir;
-                String artifactType;
-                if (name.endsWith(".png")) {
-                    subDir = "screenshots";
-                    artifactType = "SCREENSHOT";
-                } else if (name.endsWith(".webm")) {
-                    subDir = "videos";
-                    artifactType = "VIDEO";
-                } else if (name.endsWith(".zip")) {
-                    subDir = "traces";
-                    artifactType = "TRACE";
-                } else {
-                    continue;
+            // 1. Copy Playwright HTML Report
+            Path playwrightReportDir = Path.of(playwrightPath, "playwright-report");
+            if (Files.exists(playwrightReportDir)) {
+                File destReportDir = artifactBaseDir.resolve("reports").resolve("playwright-report").toFile();
+                copyDirectory(playwrightReportDir.toFile(), destReportDir, executionCode, "REPORT");
+                File indexHtml = new File(destReportDir, "index.html");
+                if (indexHtml.exists()) {
+                    Path relative = Path.of(artifactsRoot).toAbsolutePath().relativize(indexHtml.toPath().toAbsolutePath());
+                    execution.setFinalReportPath(relative.toString().replace("\\", "/"));
+                    executionRepository.save(execution);
+                    saveArtifactRecord(execution.getId(), "REPORT", indexHtml);
+                    log.info("Playwright HTML report registered: {}", execution.getFinalReportPath());
                 }
-                File dest = artifactBaseDir.resolve(subDir).resolve(name).toFile();
-                Files.copy(src, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                saveArtifactRecord(execution.getId(), artifactType, dest);
             }
 
-            log.info("Playwright artifacts successfully copied for execution: {}", executionCode);
+            // 2. Copy test-results media (screenshots, videos, traces)
+            Path testResultsDir = Path.of(playwrightPath, "test-results");
+            if (Files.exists(testResultsDir)) {
+                List<Path> files;
+                try (Stream<Path> walk = Files.walk(testResultsDir)) {
+                    files = walk.filter(Files::isRegularFile).collect(Collectors.toList());
+                }
+
+                for (Path src : files) {
+                    String name = src.getFileName().toString();
+                    String subDir;
+                    String artifactType;
+                    if (name.endsWith(".png")) {
+                        subDir = "screenshots";
+                        artifactType = "SCREENSHOT";
+                    } else if (name.endsWith(".webm")) {
+                        subDir = "videos";
+                        artifactType = "VIDEO";
+                    } else if (name.endsWith(".zip")) {
+                        subDir = "traces";
+                        artifactType = "TRACE";
+                    } else {
+                        continue;
+                    }
+                    File dest = artifactBaseDir.resolve(subDir).resolve(name).toFile();
+                    Files.copy(src, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    saveArtifactRecord(execution.getId(), artifactType, dest);
+                }
+
+                // 3. Parse results.json for structured test metrics & test cases
+                Path resultsJson = testResultsDir.resolve("results.json");
+                if (Files.exists(resultsJson)) {
+                    mergePlaywrightJsonResults(execution, resultsJson, artifactBaseDir, artifactsRoot);
+                }
+            }
+
+            log.info("Playwright artifacts and reports processed for execution: {}", executionCode);
         } catch (Exception e) {
             log.error("Failed to copy Playwright artifacts for execution: {}", execution.getExecutionCode(), e);
+        }
+    }
+
+    private void mergePlaywrightJsonResults(Execution execution, Path resultsJsonPath, Path artifactBaseDir, String artifactsRoot) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(resultsJsonPath.toFile());
+            com.fasterxml.jackson.databind.JsonNode suites = root.path("suites");
+            if (suites.isArray()) {
+                processPlaywrightSuites(suites, execution, artifactBaseDir, artifactsRoot);
+            }
+
+            com.fasterxml.jackson.databind.JsonNode stats = root.path("stats");
+            if (!stats.isMissingNode() && stats.has("expected")) {
+                int expected = stats.path("expected").asInt(0);
+                int unexpected = stats.path("unexpected").asInt(0);
+                int skipped = stats.path("skipped").asInt(0);
+                int flaky = stats.path("flaky").asInt(0);
+                int total = expected + unexpected + skipped + flaky;
+
+                if (total > 0) {
+                    execution.setTotalTests(total);
+                    execution.setPassedTests(expected);
+                    execution.setFailedTests(unexpected);
+                    execution.setSkippedTests(skipped);
+                    java.math.BigDecimal passRate = java.math.BigDecimal.valueOf(expected * 100.0 / total).setScale(2, java.math.RoundingMode.HALF_UP);
+                    java.math.BigDecimal failRate = java.math.BigDecimal.valueOf(unexpected * 100.0 / total).setScale(2, java.math.RoundingMode.HALF_UP);
+                    execution.setPassRate(passRate);
+                    execution.setFailRate(failRate);
+                    if (unexpected > 0) {
+                        execution.setStatus(ExecutionStatus.FAILED);
+                    } else if (execution.getStatus() == ExecutionStatus.RUNNING) {
+                        execution.setStatus(ExecutionStatus.COMPLETED);
+                    }
+                    executionRepository.save(execution);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to merge Playwright results.json for execution {}", execution.getExecutionCode(), e);
+        }
+    }
+
+    private void processPlaywrightSuites(com.fasterxml.jackson.databind.JsonNode suites, Execution execution, Path artifactBaseDir, String artifactsRoot) {
+        for (com.fasterxml.jackson.databind.JsonNode suite : suites) {
+            String file = suite.path("file").asText("");
+            String suiteTitle = suite.path("title").asText("");
+            String className = !file.isBlank() ? Path.of(file).getFileName().toString() : suiteTitle;
+            if (className.isBlank()) className = "PlaywrightSpec";
+
+            com.fasterxml.jackson.databind.JsonNode specs = suite.path("specs");
+            if (specs.isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode spec : specs) {
+                    String specTitle = spec.path("title").asText("Test");
+                    com.fasterxml.jackson.databind.JsonNode tests = spec.path("tests");
+                    if (tests.isArray()) {
+                        for (com.fasterxml.jackson.databind.JsonNode test : tests) {
+                            com.fasterxml.jackson.databind.JsonNode results = test.path("results");
+                            if (results.isArray() && results.size() > 0) {
+                                com.fasterxml.jackson.databind.JsonNode res = results.get(results.size() - 1);
+                                String statusStr = res.path("status").asText("passed");
+                                String dbStatus = "passed".equalsIgnoreCase(statusStr) ? "PASS"
+                                        : "skipped".equalsIgnoreCase(statusStr) ? "SKIP" : "FAIL";
+                                long duration = res.path("duration").asLong(0);
+
+                                ExecutionTestCase tc = testCaseRepository
+                                        .findFirstByExecutionIdAndClassNameAndMethodName(execution.getId(), className, specTitle)
+                                        .orElse(null);
+
+                                if (tc == null) {
+                                    tc = new ExecutionTestCase();
+                                    tc.setExecutionId(execution.getId());
+                                    tc.setClassName(className);
+                                    tc.setMethodName(specTitle);
+                                    tc.setTestName(specTitle);
+                                    tc.setModuleCode(execution.getModuleCode());
+                                    tc.setRetries(Math.max(0, results.size() - 1));
+                                }
+
+                                tc.setStatus(dbStatus);
+                                tc.setDurationMs(duration);
+
+                                if ("FAIL".equals(dbStatus)) {
+                                    com.fasterxml.jackson.databind.JsonNode err = res.path("error");
+                                    if (!err.isMissingNode() && err.has("message")) {
+                                        tc.setFailureReason(err.path("message").asText(null));
+                                        tc.setStackTrace(err.path("stack").asText(null));
+                                    } else {
+                                        com.fasterxml.jackson.databind.JsonNode errors = res.path("errors");
+                                        if (errors.isArray() && errors.size() > 0) {
+                                            tc.setFailureReason(errors.get(0).path("message").asText(null));
+                                        }
+                                    }
+                                }
+
+                                com.fasterxml.jackson.databind.JsonNode attachments = res.path("attachments");
+                                if (attachments.isArray()) {
+                                    for (com.fasterxml.jackson.databind.JsonNode att : attachments) {
+                                        String attName = att.path("name").asText("");
+                                        String attPath = att.path("path").asText("");
+                                        String contentType = att.path("contentType").asText("");
+                                        if (!attPath.isBlank()) {
+                                            String attFileName = Path.of(attPath).getFileName().toString();
+                                            if ("screenshot".equalsIgnoreCase(attName) || contentType.contains("image")) {
+                                                tc.setScreenshotPath("executions/" + execution.getExecutionCode() + "/screenshots/" + attFileName);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                tc = testCaseRepository.save(tc);
+
+                                com.fasterxml.jackson.databind.JsonNode steps = res.path("steps");
+                                if (steps.isArray() && testStepRepository.findByTestCaseIdOrderByStepOrder(tc.getId()).isEmpty()) {
+                                    int stepOrder = 0;
+                                    for (com.fasterxml.jackson.databind.JsonNode stepNode : steps) {
+                                        TestStep step = new TestStep();
+                                        step.setTestCaseId(tc.getId());
+                                        step.setStepOrder(stepOrder++);
+                                        step.setStepName(stepNode.path("title").asText("Step " + stepOrder));
+                                        step.setDurationMs(stepNode.path("duration").asLong(0));
+                                        step.setStatus(stepNode.has("error") ? "FAIL" : "PASS");
+                                        if (stepNode.has("error")) {
+                                            step.setErrorMessage(stepNode.path("error").path("message").asText(null));
+                                        }
+                                        testStepRepository.save(step);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            com.fasterxml.jackson.databind.JsonNode childSuites = suite.path("suites");
+            if (childSuites.isArray() && childSuites.size() > 0) {
+                processPlaywrightSuites(childSuites, execution, artifactBaseDir, artifactsRoot);
+            }
         }
     }
 

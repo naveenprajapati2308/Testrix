@@ -8,8 +8,8 @@ function sendEvent(eventType: string, data: Record<string, unknown>): void {
   const portalUrl = process.env.PORTAL_URL;
   const apiKey = process.env.PORTAL_API_KEY;
   const executionId = process.env.EXECUTION_ID;
-  if (!portalUrl || !apiKey || !executionId) {
-    console.error(`[Testrix] Skipping ${eventType} — PORTAL_URL / PORTAL_API_KEY / EXECUTION_ID not set`);
+  if (!portalUrl || !apiKey || !executionId || !portalUrl.startsWith('http') || portalUrl.includes('{{')) {
+    // Skipping reporter push when Testrix portal connection is not configured or still has template placeholders
     return;
   }
 
@@ -28,14 +28,33 @@ export default class TestrixReporter implements Reporter {
   }
 
   onTestBegin(test: TestCase): void {
-    sendEvent('TEST_STARTED', { testName: test.title });
+    const className = test.location ? test.location.file.split(/[\\/]/).pop() || 'Playwright' : 'Playwright';
+    sendEvent('TEST_STARTED', {
+      testName: test.title,
+      className,
+      methodName: test.title,
+      displayName: test.title,
+    });
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
     const eventType = result.status === 'passed' ? 'TEST_PASSED'
       : result.status === 'skipped' ? 'TEST_SKIPPED'
       : 'TEST_FAILED';
-    sendEvent(eventType, { testName: test.title, status: result.status, duration: result.duration });
+    const className = test.location ? test.location.file.split(/[\\/]/).pop() || 'Playwright' : 'Playwright';
+    const data: Record<string, unknown> = {
+      testName: test.title,
+      className,
+      methodName: test.title,
+      status: result.status === 'passed' ? 'PASS' : result.status === 'skipped' ? 'SKIP' : 'FAIL',
+      durationMs: result.duration,
+    };
+    if (result.error) {
+      data.exceptionMessage = result.error.message || '';
+      data.stackTrace = result.error.stack || '';
+      data.exceptionType = 'PlaywrightError';
+    }
+    sendEvent(eventType, data);
   }
 
   onEnd(result: FullResult): void {

@@ -215,6 +215,9 @@ export const api = {
   testEngineConfig: () => request('/api/test-engines/config'),
   registerTestEngine: (payload) => request('/api/test-engines', { method: 'POST', body: JSON.stringify(payload) }),
   updateTestEngine: (id, payload) => request(`/api/test-engines/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  testGitConnection: (payload) => request('/api/test-engines/test-git-connection', { method: 'POST', body: JSON.stringify(payload) }),
+  verifyFrameworkFolder: (payload) => request('/api/test-engines/verify-folder', { method: 'POST', body: JSON.stringify(payload) }),
+  generateAgentToken: (id) => request(`/api/test-engines/${id}/agent-token`, { method: 'POST' }),
   // Raw fetch, not the JSON-envelope `request()` helper — this endpoint streams a zip file body.
   downloadEngineStarterKit: async (id, apiKey) => {
     const session = authStore.get();

@@ -10,8 +10,15 @@ export default defineConfig({
   testDir: './tests',
   reporter: [
     ['list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['json', { outputFile: 'test-results/results.json' }],
     ['./tests/reporter/testrix-reporter.ts'],
   ],
+  use: {
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    trace: 'retain-on-failure',
+  },
   // Testrix's Framework Runner always dispatches with `--project=<requested browser>` (default
   // "chrome" — see FrameworkRunnerService.runPlaywright()), so a project of that name must exist
   // or the run fails immediately with "Project(s) 'chrome' not found". `channel: 'chrome'` drives
@@ -19,5 +26,6 @@ export default defineConfig({
   // instead of Playwright's own bundled Chromium, which that image deliberately never downloads.
   projects: [
     { name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
 });

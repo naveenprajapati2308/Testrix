@@ -129,6 +129,7 @@ services:
       EXECUTION_MANAGER_URL: http://automation-execution-manager:8090
       PLAYWRIGHT_FRAMEWORK_PATH: /app/playwright-framework
       PROJECT_FRAMEWORKS_ROOT: /app/project-frameworks
+      RUNNER_WORKSPACES_ROOT: /app/runner-workspaces
     volumes:
       - "${AUTOMATION_FRAMEWORK_REPO_PATH:-D:/New folder/MPHIDB}:/app/framework"
       - "${AUTOMATION_PLAYWRIGHT_PATH:-D:/playwright-js}:/app/playwright-framework"
@@ -169,6 +170,7 @@ services:
       EXECUTION_MANAGER_URL: http://automation-execution-manager:8090
       PLAYWRIGHT_FRAMEWORK_PATH: /app/playwright-framework
       PROJECT_FRAMEWORKS_ROOT: /app/project-frameworks
+      RUNNER_WORKSPACES_ROOT: /app/runner-workspaces
     volumes:
       - "${AUTOMATION_FRAMEWORK_REPO_PATH:-D:/New folder/MPHIDB}:/app/framework"
       - "${AUTOMATION_PLAYWRIGHT_PATH:-D:/playwright-js}:/app/playwright-framework"

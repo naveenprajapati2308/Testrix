@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -45,6 +46,7 @@ public class ScreenshotController {
     }
 
     public record ScreenshotDto(
+        Long id,
         Long testCaseId,
         Long executionId,
         String executionCode,
@@ -53,7 +55,8 @@ public class ScreenshotController {
         String methodName,
         String screenshotPath,
         String failureReason,
-        Instant createdAt
+        Instant createdAt,
+        String mediaType
     ) {}
 
     @GetMapping
@@ -69,11 +72,10 @@ public class ScreenshotController {
             }
         }
 
-        // Preload executions to avoid N+1 queries, and to resolve which executionIds are in
-        // scope when no single executionId was requested.
+        // Preload executions to avoid N+1 queries, and to resolve which executionIds are in scope
         List<Execution> allExecutions = executionRepository.findAll();
-        Map<Long, String> executionMap = allExecutions.stream()
-                .collect(Collectors.toMap(Execution::getId, Execution::getExecutionCode, (p1, p2) -> p1));
+        Map<Long, Execution> executionEntityMap = allExecutions.stream()
+                .collect(Collectors.toMap(Execution::getId, e -> e, (e1, e2) -> e1));
         java.util.Set<Long> allowedExecutionIds = allExecutions.stream()
                 .filter(e -> projectId.equals(e.getProjectId()))
                 .map(Execution::getId)
@@ -88,8 +90,10 @@ public class ScreenshotController {
 
         List<ScreenshotDto> dtos = new ArrayList<>();
         for (ExecutionTestCase tc : cases) {
-            String code = executionMap.getOrDefault(tc.getExecutionId(), "AUTO-UNKNOWN");
+            Execution exec = executionEntityMap.get(tc.getExecutionId());
+            String code = exec != null ? exec.getExecutionCode() : "AUTO-UNKNOWN";
             dtos.add(new ScreenshotDto(
+                tc.getId(),
                 tc.getId(),
                 tc.getExecutionId(),
                 code,
@@ -98,50 +102,86 @@ public class ScreenshotController {
                 tc.getMethodName(),
                 tc.getScreenshotPath(),
                 tc.getFailureReason(),
-                tc.getCreatedAt()
+                tc.getCreatedAt(),
+                "IMAGE"
             ));
         }
 
+        // Include Video recordings from execution artifacts
+        List<ExecutionArtifact> videos = artifactRepository.findAll().stream()
+                .filter(art -> "VIDEO".equalsIgnoreCase(art.getArtifactType()))
+                .filter(art -> art.getFilePath() != null && !art.getFilePath().isBlank())
+                .filter(art -> executionId == null || art.getExecutionId().equals(executionId))
+                .filter(art -> allowedExecutionIds.contains(art.getExecutionId()))
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .collect(Collectors.toList());
+
+        for (ExecutionArtifact vid : videos) {
+            Execution exec = executionEntityMap.get(vid.getExecutionId());
+            String code = exec != null ? exec.getExecutionCode() : "AUTO-UNKNOWN";
+            String mod = exec != null ? exec.getModuleCode() : null;
+            dtos.add(new ScreenshotDto(
+                vid.getId(),
+                null,
+                vid.getExecutionId(),
+                code,
+                mod,
+                vid.getFileName(),
+                "Recording — " + vid.getFileName(),
+                vid.getFilePath(),
+                "Playwright Video Recording (.webm)",
+                vid.getCreatedAt(),
+                "VIDEO"
+            ));
+        }
+
+        dtos.sort((a, b) -> b.createdAt().compareTo(a.createdAt()));
         return ApiResponse.ok(dtos);
     }
 
     /**
-     * Deletes the screenshot image belonging to a test case: removes the file from
-     * the artifacts folder, the matching execution_artifacts row, and clears the
-     * test case's screenshot_path. The test case row itself is kept.
+     * Deletes a screenshot or video media item from disk and repository.
      */
-    @DeleteMapping("/{testCaseId}")
+    @DeleteMapping("/{id}")
     @Transactional
-    public ApiResponse<String> delete(@PathVariable Long testCaseId) throws IOException {
-        ExecutionTestCase tc = testCaseRepository.findById(testCaseId)
-                .orElseThrow(() -> new IllegalArgumentException("Screenshot not found for test case: " + testCaseId));
-        Execution owningExecution = executionRepository.findById(tc.getExecutionId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Screenshot not found for test case: " + testCaseId));
+    public ApiResponse<String> delete(@PathVariable Long id) throws IOException {
+        Optional<ExecutionTestCase> tcOpt = testCaseRepository.findById(id);
+        if (tcOpt.isPresent()) {
+            ExecutionTestCase tc = tcOpt.get();
+            Execution owningExecution = executionRepository.findById(tc.getExecutionId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Screenshot not found for test case: " + id));
+            if (!currentProjectService.canAccess(owningExecution.getProjectId())) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Screenshot not found for test case: " + id);
+            }
+
+            String screenshotPath = tc.getScreenshotPath();
+            if (screenshotPath != null && !screenshotPath.trim().isEmpty()) {
+                Path root = Paths.get(automationProperties.getArtifactsRoot()).toAbsolutePath().normalize();
+                Path file = root.resolve(screenshotPath).normalize();
+                if (file.startsWith(root)) {
+                    Files.deleteIfExists(file);
+                }
+                artifactRepository.deleteByExecutionIdAndFilePath(tc.getExecutionId(), screenshotPath);
+                tc.setScreenshotPath(null);
+                testCaseRepository.save(tc);
+            }
+            return ApiResponse.ok("Screenshot deleted successfully");
+        }
+
+        ExecutionArtifact artifact = artifactRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Media item not found: " + id));
+        Execution owningExecution = executionRepository.findById(artifact.getExecutionId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Execution not found for media"));
         if (!currentProjectService.canAccess(owningExecution.getProjectId())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Screenshot not found for test case: " + testCaseId);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Media item not found: " + id);
         }
 
-        String screenshotPath = tc.getScreenshotPath();
-        if (screenshotPath == null || screenshotPath.trim().isEmpty()) {
-            throw new IllegalArgumentException("This test case has no screenshot to delete");
-        }
-
-        // Resolve inside the artifacts root only — reject any traversal outside it.
         Path root = Paths.get(automationProperties.getArtifactsRoot()).toAbsolutePath().normalize();
-        Path file = root.resolve(screenshotPath).normalize();
-        if (!file.startsWith(root)) {
-            throw new IllegalArgumentException("Invalid screenshot path");
+        Path file = root.resolve(artifact.getFilePath()).normalize();
+        if (file.startsWith(root)) {
+            Files.deleteIfExists(file);
         }
-
-        boolean fileDeleted = Files.deleteIfExists(file);
-        if (!fileDeleted) {
-            log.warn("Screenshot file already missing on disk: {}", file);
-        }
-
-        artifactRepository.deleteByExecutionIdAndFilePath(tc.getExecutionId(), screenshotPath);
-        tc.setScreenshotPath(null);
-        testCaseRepository.save(tc);
-
-        return ApiResponse.ok("Screenshot deleted successfully");
+        artifactRepository.delete(artifact);
+        return ApiResponse.ok("Media item deleted successfully");
     }
 }

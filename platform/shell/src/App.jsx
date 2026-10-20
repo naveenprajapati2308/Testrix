@@ -45,7 +45,9 @@ const fetchJson = async (url, headers) => {
 
 // ── Hash routing ─────────────────────────────────────────────────────────────
 const ADMIN_PAGE_KEYS = new Set(ADMIN_WORKSPACE_NAV_FLAT.map((item) => item.key));
-const AUTOMATION_PAGE_KEYS = new Set(AUTOMATION_NAV.map((item) => item.key));
+const AUTOMATION_PAGE_KEYS = new Set(
+  AUTOMATION_NAV.flatMap((item) => (item.children ? [item.key, ...item.children.map((c) => c.key)] : [item.key]))
+);
 const API_TESTING_PAGE_KEYS = new Set(API_TESTING_NAV.map((item) => item.key));
 const PERFORMANCE_PAGE_KEYS = new Set(PERFORMANCE_NAV.map((item) => item.key));
 const TEST_CASE_GEN_PAGE_KEYS = new Set(TEST_CASE_GEN_NAV.map((item) => item.key));
@@ -76,6 +78,15 @@ const parseHashRoute = () => {
     return { ...DEFAULT_ROUTE, page: 'team' };
   }
   if (head === 'workspace-settings') {
+    return { ...DEFAULT_ROUTE, page: 'workspace-settings' };
+  }
+  if (head === 'automation-settings') {
+    return { ...DEFAULT_ROUTE, page: 'automation-settings' };
+  }
+  if (head === 'settings') {
+    if (sub === 'automation' || sub === 'automation-settings') {
+      return { ...DEFAULT_ROUTE, page: 'automation-settings' };
+    }
     return { ...DEFAULT_ROUTE, page: 'workspace-settings' };
   }
   if (head === 'documentation') {
@@ -670,7 +681,15 @@ export default function App() {
     pageTitle = 'Workspace Settings';
     breadcrumbItems = [
       { label: 'Home', onClick: goDashboard },
+      { label: 'Settings' },
       { label: 'Workspace Settings' }
+    ];
+  } else if (page === 'automation-settings') {
+    pageTitle = 'Automation Settings';
+    breadcrumbItems = [
+      { label: 'Home', onClick: goDashboard },
+      { label: 'Settings' },
+      { label: 'Automation Settings' }
     ];
   } else if (page === 'documentation') {
     pageTitle = 'Documentation';
@@ -1000,15 +1019,29 @@ export default function App() {
           />
         ) : (
           <Sidebar
-            active={page}
-            activeChildKey={page === 'automation' ? automationPage : page === 'apitest' ? apitestPage : page === 'perf' ? perfPage : page === 'testgen' ? testgenPage : null}
+            active={page === 'workspace-settings' || page === 'automation-settings' ? 'settings' : page}
+            activeChildKey={
+              page === 'automation' ? automationPage :
+              page === 'apitest' ? apitestPage :
+              page === 'perf' ? perfPage :
+              page === 'testgen' ? testgenPage :
+              page === 'workspace-settings' ? 'workspace-settings' :
+              page === 'automation-settings' ? 'automation-settings' : null
+            }
             logout={logout}
             project={session?.project}
             onNavigate={(key) => {
               if (key === 'dashboard') goDashboard();
               if (key === 'profile') goProfile();
               if (key === 'team') goTeam();
-              if (key === 'workspace-settings') goWorkspaceSettings();
+              if (key === 'settings' || key === 'workspace-settings') {
+                setPage('workspace-settings');
+                window.location.hash = '#/settings/workspace-settings';
+              }
+              if (key === 'automation-settings') {
+                setPage('automation-settings');
+                window.location.hash = '#/settings/automation-settings';
+              }
               if (key === 'documentation') goDocumentation();
               if (key === 'ai-assistant') goAiAssistant();
               if (key === 'automation') setAutomationPageAndHash(automationPage);
@@ -1017,6 +1050,16 @@ export default function App() {
               if (key === 'testgen') setTestgenPageAndHash(testgenPage);
             }}
             onNavigateChild={(parentKey, childKey) => {
+              if (parentKey === 'settings') {
+                if (childKey === 'automation-settings') {
+                  setPage('automation-settings');
+                  window.location.hash = '#/settings/automation-settings';
+                } else {
+                  setPage('workspace-settings');
+                  window.location.hash = '#/settings/workspace-settings';
+                }
+                return;
+              }
               if (parentKey === 'automation') setAutomationPageAndHash(childKey);
               if (parentKey === 'apitest') setApitestPageAndHash(childKey);
               if (parentKey === 'perf') setPerfPageAndHash(childKey);
@@ -1072,6 +1115,8 @@ export default function App() {
           <ProjectUserManagement setNotice={notify} />
         ) : page === 'workspace-settings' ? (
           <WorkspaceSettings setNotice={notify} />
+        ) : page === 'automation-settings' ? (
+          <AutomationWorkspace activePage="settings-engines" />
         ) : page === 'documentation' ? (
           <IntegrationGuide project={session?.project} setNotice={notify} />
         ) : page === 'ai-assistant' ? (

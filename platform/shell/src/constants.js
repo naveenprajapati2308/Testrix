@@ -18,7 +18,7 @@ export const AUTOMATION_NAV = [
   { key: 'screenshots', label: 'Screenshots', icon: 'Camera' },
   { key: 'compare', label: 'Historical Compare', icon: 'GitCompare' },
   { key: 'environments', label: 'Environments', icon: 'Globe2' },
-  { key: 'automation-setup', label: 'Add Framework', icon: 'Wrench', projectAdminOnly: true }
+  { key: 'automation-setup', label: 'Add Framework', icon: 'Wrench' }
 ];
 
 

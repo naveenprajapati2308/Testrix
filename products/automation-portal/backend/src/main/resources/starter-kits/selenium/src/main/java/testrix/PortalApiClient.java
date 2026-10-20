@@ -24,9 +24,10 @@ public final class PortalApiClient {
         String portalUrl = ConfigUtils.get("portal.url");
         String apiKey = ConfigUtils.get("portal.api.key");
         String executionId = ConfigUtils.get("executionId");
-        if (portalUrl == null || portalUrl.isBlank() || apiKey == null || apiKey.isBlank()
-                || executionId == null || executionId.isBlank()) {
-            System.err.println("[Testrix] Skipping " + eventType + " — portal.url / portal.api.key / executionId not configured");
+        if (portalUrl == null || portalUrl.isBlank() || !portalUrl.startsWith("http") || portalUrl.contains("{{")
+                || apiKey == null || apiKey.isBlank() || apiKey.contains("{{")
+                || executionId == null || executionId.isBlank() || executionId.contains("{{")) {
+            // Testrix portal connection is not configured or still has template placeholders — skip silently
             return;
         }
 

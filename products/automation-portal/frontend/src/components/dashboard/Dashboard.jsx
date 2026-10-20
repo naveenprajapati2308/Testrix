@@ -8,7 +8,8 @@ import {
   HelpCircle,
   Globe2,
   History,
-  Timer
+  Timer,
+  Settings2
 } from 'lucide-react';
 import { api, auth, API_BASE } from '../../api.js';
 import { Loader } from '../../../../../../shared/ui/Loader.jsx';
@@ -297,14 +298,39 @@ export function Dashboard({ onSelectExecution, onNavigate }) {
           <h3>Analytics Dashboard</h3>
         </div>
 
-        <div className="db-range">
-          Filter Range:
-          <select className="db-select" value={range} onChange={(e) => setRange(e.target.value)}>
-            <option value="today">Today</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-            <option value="90d">Last 90 Days</option>
-          </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {onNavigate && (
+            <button
+              type="button"
+              className="db-range"
+              onClick={() => onNavigate('settings')}
+              style={{
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '5px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--text-secondary)'
+              }}
+            >
+              <Settings2 size={13} color="#3b82f6" />
+              Settings
+            </button>
+          )}
+          <div className="db-range">
+            Filter Range:
+            <select className="db-select" value={range} onChange={(e) => setRange(e.target.value)}>
+              <option value="today">Today</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="90d">Last 90 Days</option>
+            </select>
+          </div>
         </div>
       </div>
 

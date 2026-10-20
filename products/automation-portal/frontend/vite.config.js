@@ -3,9 +3,8 @@ import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
-  // Served at /automation/ behind the Testrix gateway (VITE_BASE set in the
-  // gateway image build); plain '/' for local dev.
-  base: process.env.VITE_BASE || '/',
+  // Served at /automation/ behind the Testrix gateway (default to /automation/ so gateway asset paths never break)
+  base: process.env.VITE_BASE || '/automation/',
   plugins: [react()],
   resolve: {
     // shared/ui/dashboard's chart components import these bare specifiers, but that

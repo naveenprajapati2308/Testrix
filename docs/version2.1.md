@@ -1,832 +1,907 @@
-# Testrix Multi-Workspace Architecture (Phase 2) – Project-Based Workspace & Role Management
+# MASTER ENGINEERING COMMAND — TESTRIX PERFORMANCE TESTING PLATFORM
+## Complete Architecture Audit, Performance Testing Coverage, Implementation Planning, and Enterprise-Grade Execution
 
-## Objective
+### 1. ROLE AND OBJECTIVE
 
-Now that the core platform is approaching a stable state, I want to start planning the next major architectural milestone before deployment.
+Act as a Principal Performance Engineering Architect, Senior Java/Spring Boot Engineer, React Architect, Database Designer, Test Automation Specialist, and Distributed Systems Engineer.
 
-This is **not an implementation request yet**.
+Your task is to deeply inspect, analyze, redesign where necessary, and prepare an implementation-ready engineering plan for the Performance Testing module inside the existing Testrix application.
 
-The goal is to design a complete **Multi-Workspace Architecture** that allows multiple projects, multiple organizations, multiple users, and multiple roles to work independently inside the same Testrix instance.
+This is a real product engineering task, not an interview exercise, academic explanation, or generic tutorial.
 
-The implementation should follow an enterprise SaaS-style architecture while keeping the current system scalable and maintainable.
+The objective is to evolve Testrix into a comprehensive performance testing platform supporting multiple testing methodologies, workload models, API and browser performance testing, live monitoring, detailed analytics, scheduled executions, distributed execution runners, and future multi-engine support.
 
-Please analyze this proposal, identify architectural gaps, suggest improvements, and produce a complete implementation plan before any coding begins.
+Do not begin by blindly rewriting code or introducing new libraries. First understand the existing codebase and identify what already works, what is incomplete, what is incorrectly designed, and what is missing.
 
----
-
-# Current Situation
-
-Currently, Testrix behaves like a single global application.
-
-There is only one shared dashboard.
-
-All modules are available globally.
-
-The current Workspace concept exists, but it is owned by the Super Admin and is not yet project-centric.
-
-This architecture is no longer sufficient.
-
-We now need to convert Testrix into a **Project-Oriented Multi-Workspace Platform**.
+Produce a detailed technical analysis and implementation plan grounded in the actual repository.
 
 ---
 
-# High-Level Architecture
+### 2. MANDATORY TECHNOLOGY STACK
 
-The platform should consist of three logical layers:
+The architecture must respect the following stack:
 
-## 1. Super Admin
+- Frontend: React, using the existing project conventions and dependencies.
+- Backend: Java with Spring Boot.
+- Database: MySQL.
+- Existing performance engine: Grafana k6.
+- Future performance engine: Apache JMeter.
+- Execution strategy: Isolated engine processes or containers, with support for future distributed runners.
+- Visualization: Prefer the existing charting library if suitable; otherwise evaluate Recharts and Apache ECharts.
+- Live execution updates: Evaluate Server-Sent Events (SSE), WebSockets, or the existing real-time communication mechanism.
+- Scheduling: Inspect and extend the existing API scheduler rather than automatically replacing it.
+- Database migrations: Follow the existing migration system; evaluate Flyway if no appropriate system exists.
+- Infrastructure monitoring: Evaluate Prometheus, exporters, and compatible time-series storage when justified by actual requirements.
 
-This is the highest authority in Testrix.
+Do not introduce Node.js as the performance backend. Do not replace Spring Boot or MySQL with a different primary backend or database.
 
-The Super Admin manages the platform itself.
-
-The Super Admin should **never work inside a project**.
-
-Instead, the Super Admin manages projects, workspaces, organizations, users, and roles.
-
-The Super Admin should not directly execute automation, API tests, or performance tests inside a project.
-
-Instead, the Super Admin controls the platform.
-
----
-
-## 2. Project Workspace
-
-Every project should have its own isolated Workspace.
-
-Each Workspace represents one software project.
-
-Examples:
-
-```text
-MP Housing Board ERP
-
-Revenue ERP
-
-Citizen Portal
-
-Police ERP
-
-Health Management System
-```
-
-Each Workspace should be completely independent.
-
-Everything inside one Workspace must remain isolated from every other Workspace.
+Redis, Kafka, RabbitMQ, Quartz, Kubernetes, Prometheus, Grafana, or other infrastructure components must not be introduced merely because they are popular. Explain the actual requirement, benefits, operational cost, and alternatives before recommending each dependency.
 
 ---
 
-## 3. Project Users
+### 3. FIRST PHASE: COMPLETE EXISTING CODEBASE AUDIT
 
-Every Workspace has its own users.
+Inspect the complete relevant Testrix repository, including frontend, backend, database, configuration, scripts, existing execution infrastructure, scheduler, and deployment files.
 
-Examples:
+Do not infer implementation details from filenames alone. Read the relevant source code and trace the actual execution flow.
 
-* Project Admin
-* QA Lead
-* Automation Engineer
-* Manual Tester
-* API Tester
-* Performance Engineer
-* Viewer
+Inspect the following areas:
 
-These users should only access the Workspace they belong to.
+A. React frontend:
+- Performance dashboard and navigation.
+- Existing test creation and configuration forms.
+- Virtual-user and workload configuration.
+- Test groups, scenarios, and script management.
+- Execution history and result views.
+- Existing charts, graphs, and statistics.
+- API integration layer and authentication.
+- Current scheduler UI.
+- Drift detection and baseline comparison.
+- Error handling, loading states, and live updates.
+- Shared Testrix components and theme conventions.
 
----
+B. Spring Boot backend:
+- Controllers, DTOs, services, repositories, and entities.
+- Existing k6 execution integration.
+- Process creation, output collection, and cancellation.
+- Execution lifecycle and status transitions.
+- Existing scheduler and its persistence mechanism.
+- Queueing, concurrency, locking, retries, and duplicate prevention.
+- MySQL schema, indexes, relationships, and migrations.
+- Script and artifact storage.
+- Existing report generation and metrics aggregation.
+- Authentication, authorization, project isolation, and audit logging.
+- Existing drift detection and execution comparison logic.
 
-# New Login Flow
+C. Infrastructure:
+- Dockerfiles and Docker Compose configuration.
+- Existing runner processes and worker management.
+- Resource limits and cleanup behaviour.
+- Configuration files and environment variables.
+- Logging, health checks, deployment assumptions, and CI/CD integration.
 
-The current login page should be enhanced.
+For every existing feature, classify it as:
 
-Along with Login, add a new option:
+1. Implemented and working.
+2. Implemented but incomplete.
+3. Implemented with architectural or reliability problems.
+4. Missing.
+5. Requires verification through an integration test.
 
-> **Request Workspace**
+Create a file-level inventory showing relevant file paths, responsibilities, dependencies, and recommended changes.
 
-This allows a new project team to request access to Testrix.
-
----
-
-# Workspace Request Flow
-
-When someone clicks **Request Workspace**, they should complete a registration form.
-
-Example information:
-
-## Project Information
-
-* Project Name
-* Organization Name
-* Project Description
-* Technology Stack
-* Backend Technology
-* Frontend Technology
-* Database
-* CI/CD Tool (Optional)
-
----
-
-## Required Testing Modules
-
-Allow the requester to choose which Testrix products they require.
-
-Examples:
-
-Automation Testing
-
-* Selenium
-* Playwright
-
-API Testing
-
-Performance Testing
-
-Future Modules
-
-The selected modules determine what will be enabled inside the Workspace.
+Do not fabricate files, APIs, classes, dependencies, or existing capabilities.
 
 ---
 
-## Workspace Information
+### 4. PERFORMANCE TESTING TAXONOMY — COMPLETE COVERAGE
 
-Workspace Name
+Build a structured catalog of performance testing types and explain how each can be implemented using k6, JMeter, supporting integrations, or a combination of these.
 
-Preferred Workspace Code
+At minimum, evaluate the following categories:
 
-Project Manager Name
+#### A. Core workload tests
+- Smoke performance testing.
+- Baseline testing.
+- Normal-load testing.
+- Expected-load testing.
+- Peak-load testing.
+- Stress testing.
+- Spike testing.
+- Soak testing.
+- Endurance testing.
+- Breakpoint testing.
+- Capacity testing.
+- Scalability testing.
+- Volume testing.
+- Concurrency testing.
+- Burst testing.
+- Flash-crowd testing.
+- Wave testing.
+- Ramp-up and ramp-down testing.
+- Step-load testing.
+- Recovery testing.
+- Failover testing.
+- Resilience testing.
+- Saturation testing.
+- Resource-exhaustion testing.
+- Performance regression testing.
 
-Email
+#### B. Workload models
+- Constant virtual users.
+- Ramping virtual users.
+- Constant arrival rate.
+- Ramping arrival rate.
+- Externally controlled workload.
+- Closed workload models.
+- Open workload models.
+- Mixed workload profiles.
+- Multiple scenario groups.
+- Weighted user journeys.
+- Think time and pacing.
+- Realistic user-session behaviour.
+- Target request-rate profiles.
+- Long-running and scheduled workload profiles.
 
-Phone
+Explain the difference between virtual users, iterations, requests per second, transactions per second, concurrency, and throughput. Do not treat these metrics as interchangeable.
 
-Expected Team Size
+#### C. Application and protocol testing
+- REST API performance.
+- SOAP over HTTP where applicable.
+- GraphQL.
+- Authentication and token refresh.
+- CRUD operations.
+- Multi-step API workflows.
+- Dependent requests and correlation.
+- Request and response payload sizes.
+- File upload and download.
+- Pagination, filtering, and search.
+- Rate limiting and throttling.
+- Timeouts, retries, and backpressure.
+- WebSocket workloads.
+- gRPC.
+- TCP, FTP, LDAP, and other supported protocols.
+- Database/JDBC performance.
+- JMS and message-queue workloads.
+- Asynchronous processing.
+- Cache behaviour.
+- Third-party integrations.
 
-Additional Notes
+For every protocol, clearly distinguish native engine support from plugins, extensions, custom scripts, and external integrations. Never claim unsupported functionality is built in.
 
----
+#### D. Browser and UI performance
+- Browser-based login.
+- Navigation between pages.
+- SPA route transitions.
+- Menu and tab interactions.
+- Search and filtering journeys.
+- Form submission.
+- Page readiness and rendering.
+- Browser network requests.
+- Frontend JavaScript errors.
+- Failed resources and console errors.
+- Largest Contentful Paint (LCP).
+- Interaction to Next Paint (INP).
+- Cumulative Layout Shift (CLS).
+- Browser memory and resource behaviour where measurable.
+- API latency versus browser-observed latency.
+- Combined browser and API workloads.
 
-# Approval Workflow
+Clearly distinguish functional navigation correctness from browser performance measurement.
 
-Submitting a request should not immediately create a Workspace.
+Explain why browser-level virtual users have a different resource cost from protocol-level virtual users. Recommend a realistic mixed testing strategy instead of assuming thousands of browser instances can be executed as cheaply as HTTP virtual users.
 
-Instead:
+#### E. Infrastructure and distributed-system performance
+- CPU utilization.
+- Memory utilization.
+- Disk I/O.
+- Network throughput and latency.
+- Container limits.
+- Thread pools and connection pools.
+- Database connection saturation.
+- Slow queries and lock contention.
+- Queue depth and consumer lag.
+- Microservice latency.
+- Distributed tracing.
+- Autoscaling behaviour.
+- Load-generator saturation.
+- Runner failures and recovery.
+- Horizontal and vertical scaling.
+- Infrastructure capacity planning.
 
-Request
+Separate metrics collected by the load engine from metrics requiring exporters, database instrumentation, tracing, cloud APIs, or external monitoring systems.
 
-↓
+#### F. Advanced performance engineering
+- Performance budgets.
+- SLO/SLA validation.
+- Baseline comparison.
+- Regression detection.
+- Capacity forecasting.
+- Latency distribution analysis.
+- Anomaly detection.
+- Bottleneck correlation.
+- Performance trends across releases.
+- Performance testing in CI/CD.
+- Scheduled performance regression suites.
 
-Super Admin Review
+For every test category, provide:
 
-↓
+- Objective.
+- Suitable application scenarios.
+- Required configuration fields.
+- Recommended engine.
+- Implementation approach.
+- Required libraries or infrastructure.
+- Metrics collected.
+- Thresholds and pass/fail criteria.
+- Limitations.
+- Implementation priority.
 
-Approve / Reject
-
-If approved:
-
-* Workspace created
-* Project created
-* Project Admin account created
-* Default project roles assigned
-* Selected testing modules enabled
-
-If rejected:
-
-Store rejection reason.
-
-Allow resubmission later.
-
----
-
-# Super Admin Responsibilities
-
-After this architecture is implemented, the Super Admin becomes a true platform administrator.
-
-Responsibilities include:
-
-* Workspace Approval
-* Workspace Management
-* Project Management
-* User Management
-* Global Role Management
-* Module Licensing
-* Platform Configuration
-* Platform Health
-* Audit Logs
-* Subscription Management (Future)
-* Global Analytics
-
-The Super Admin should not manage project-level testing activities.
-
----
-
-# Project Admin Responsibilities
-
-Every approved Workspace should have one Project Admin.
-
-The Project Admin becomes the owner of that Workspace.
-
-Responsibilities include:
-
-* Manage project users
-* Invite users
-* Remove users
-* Assign roles
-* Manage project settings
-* Enable/Disable purchased testing modules
-* Configure environments
-* Configure integrations
-* Manage project execution
-
-The current Workspace functionality should move under the Project Admin.
-
----
-
-# Role Management
-
-Roles should exist at two different levels.
-
-## Platform Roles
-
-Created only by Super Admin.
-
-Examples:
-
-Project Admin
-
-QA Lead
-
-Automation Engineer
-
-Manual Tester
-
-API Tester
-
-Performance Engineer
-
-Viewer
-
-Future Roles
-
-The Super Admin decides:
-
-* Role Name
-* Permissions
-* Module Access
-
----
-
-## Project User Assignment
-
-Project Admin cannot create new platform roles.
-
-Instead,
-
-they simply assign existing roles to project users.
-
-One user may have multiple roles.
-
-Example:
-
-```text
-John
-
-QA Lead
-
-Automation Engineer
-
-API Tester
-```
-
-This many-to-many role mapping should replace the current dummy implementation.
+Classify each capability as:
+1. Native engine functionality.
+2. Requires Testrix orchestration or custom code.
+3. Requires an external integration.
+4. Experimental or subject to technical validation.
 
 ---
 
-# User Experience
+### 5. TARGET ARCHITECTURE
 
-After login,
+Design the target architecture using React, Spring Boot, and MySQL.
 
-every user enters their assigned Workspace.
+The architecture should include:
 
-All users should continue to see the standard Testrix Dashboard.
+1. React Performance Workspace.
+2. Spring Boot REST API.
+3. Test Definition Service.
+4. Scenario and Workload Configuration.
+5. Script and Test-Plan Management.
+6. Execution Orchestrator.
+7. Scheduler.
+8. Persistent Queue or equivalent dispatch mechanism.
+9. Runner Registry and Health Monitoring.
+10. k6 Engine Adapter.
+11. Future JMeter Engine Adapter.
+12. Metrics Collection and Normalization.
+13. Threshold Evaluation.
+14. Reporting and Analytics.
+15. Historical Baselines and Regression Detection.
+16. Artifact Storage.
+17. Infrastructure Observability.
+18. Authentication, authorization, and audit logging.
 
-However,
+Provide:
 
-features should appear based on permissions.
+- Architecture diagram.
+- Component responsibilities.
+- Synchronous versus asynchronous interactions.
+- Execution lifecycle.
+- Failure paths.
+- Data ownership.
+- Security boundaries.
+- Scaling strategy.
+- Deployment topology.
+- Trade-offs between a modular monolith and microservices.
 
-For example:
+Prefer a modular Spring Boot backend initially unless repository evidence or demonstrated scaling requirements justify separating services.
 
-Automation Engineer
-
-* Dashboard
-* Automation
-* Reports
-
-QA Lead
-
-* Dashboard
-* Analytics
-* Execution Center
-* Reports
-
-Project Admin
-
-* Everything inside that Workspace
-* Project Administration
-* User Management
-* Environment Management
-* Workspace Settings
-
-Super Admin
-
-* Platform Dashboard
-* Workspace Requests
-* Project Management
-* Global Users
-* Global Roles
-* Platform Administration
-
-The UI should be permission-driven rather than having separate dashboards for every role.
+Do not create a separate service for every module by default.
 
 ---
 
-# Workspace Settings
+### 6. ENGINE ABSTRACTION AND MULTI-ENGINE SUPPORT
 
-Each Workspace should contain a Settings section.
+Design a stable engine abstraction so k6 is supported immediately and JMeter can be introduced later without rewriting the complete application.
 
-From here the Project Admin can:
+Evaluate an interface conceptually similar to:
 
-* Enable/Disable licensed modules
-* Configure environments
-* Manage integrations
-* Configure notifications
-* Manage execution settings
-* Configure project-specific preferences
+- getEngineType()
+- validateExecution()
+- prepareExecution()
+- launchExecution()
+- getExecutionStatus()
+- collectMetrics()
+- cancelExecution()
+- collectFinalResult()
+- collectArtifacts()
 
-Without affecting any other Workspace.
+These are conceptual operations, not mandatory method signatures.
+
+Define a normalized execution specification that includes:
+
+- Test definition ID.
+- Execution ID.
+- Project and environment.
+- Engine and engine version.
+- Script or test-plan version.
+- Scenario configuration.
+- Workload model.
+- Duration and execution stages.
+- Test data references.
+- Thresholds.
+- Environment variables and secret references.
+- Resource limits.
+- Target authorization policy.
+
+Define a common metrics model for:
+
+- Requests and iterations.
+- Response-time distributions.
+- Throughput.
+- Errors and failed checks.
+- Dropped iterations.
+- Active users.
+- Data transfer.
+- Engine health.
+- Threshold evaluation.
+
+Preserve engine-specific metrics and artifacts instead of forcing every engine into an identical feature set.
+
+For JMeter, evaluate:
+- JMX import and export.
+- Non-GUI execution.
+- CLI arguments and properties.
+- JTL result processing.
+- CSV data files.
+- Plugins and protocol-specific samplers.
+- Distributed execution.
+- Version compatibility.
+- Resource management.
+- Result normalization.
+
+Explicitly prevent accidental workload multiplication in distributed JMeter execution.
 
 ---
 
-# Security & Isolation
+### 7. TEST STUDIO AND CONFIGURATION BUILDER
 
-Workspace isolation is mandatory.
+Design a complete React Test Studio.
 
-Users must never access another project's:
+The configuration workflow should cover:
 
-* Executions
-* Reports
-* Test Suites
-* Analytics
-* Users
-* Roles
-* Settings
-* Environments
+1. Test identity and project.
+2. Environment and target URL.
+3. Engine selection.
+4. Script/test-plan selection.
+5. Test type.
+6. Workload model.
+7. Virtual users or arrival rate.
+8. Ramp-up, steady-state, spike, ramp-down, and recovery stages.
+9. Duration and iteration limits.
+10. Scenario groups and weighted user journeys.
+11. Request headers and authentication references.
+12. Test data and parameterization.
+13. Correlation and dynamic values.
+14. Thresholds and performance budgets.
+15. Runner selection and resource limits.
+16. Validation and preflight checks.
+17. Execution review and confirmation.
 
-Every query, API, and dashboard should respect Workspace boundaries.
+Support predefined workload templates and advanced custom configuration.
 
----
+Explain how each template maps to actual k6 executors or JMeter Thread Groups, timers, controllers, and properties.
 
-# Future Enhancements
+Provide validation rules, reasonable defaults, configuration constraints, and engine-specific limitations.
 
-Design the architecture with future features in mind:
-
-* Organization-level workspaces
-* Multiple Project Admins
-* Workspace Templates
-* Billing & Subscription
-* Marketplace
-* AI Workspace Assistant
-* Shared Libraries
-* Cross-Workspace Reporting (Super Admin only)
-* SSO (Azure AD, Google, Okta)
-* LDAP
-* Audit Logs
-* Backup & Restore
-* Workspace Import/Export
-
-The architecture should support these features without major redesign.
-
-# Tenant & Project Isolation (Core Platform Architecture)
-
-This is a mandatory architectural requirement and must become the foundation of the entire Testrix platform.
-
-Testrix is being designed as a true multi-workspace, multi-project platform. Therefore, every resource in the system must be logically isolated using both **Tenant ID** and **Project ID**.
-
-This architecture is required to prevent cross-project data access, ensure security, and support future scalability.
-
-## Tenant ID
-
-A Tenant represents an organization or customer using Testrix.
-
-Each Tenant will have a unique identifier.
-
-Example:
-
-TEN-000001
-TEN-000002
-
-A Tenant may own one or more Projects in the future.
-
-## Project ID
-
-Every Workspace (Project) must have its own unique Project ID.
-
-Examples:
-
-PRJ-000001
-PRJ-000002
-PRJ-000003
-
-Each Project always belongs to a single Tenant.
-
-The combination of **Tenant ID + Project ID** becomes the primary context for all business operations inside Testrix.
-
-## Data Isolation Rules
-
-Every major entity in the platform must be associated with the appropriate Tenant ID and Project ID wherever applicable.
-
-This includes, but is not limited to:
-
-* Users
-* User Role Mapping
-* Workspaces
-* Framework Configurations
-* Modules
-* Test Suites
-* Test Cases
-* Executions
-* Reports
-* Environments
-* Schedulers
-* Notifications
-* Integrations
-* AI Context
-* Dashboard Analytics
-* Historical Compare
-* Future Modules
-
-No data should ever exist without being associated with its corresponding Tenant and Project context.
-
-## API Architecture
-
-All backend APIs must be designed around the Tenant and Project context.
-
-The backend should never return global data by default.
-
-Every request must first resolve:
-
-Tenant ID
-
-↓
-
-Project ID
-
-↓
-
-User
-
-↓
-
-Assigned Roles
-
-↓
-
-Accessible Modules
-
-↓
-
-Requested Data
-
-Examples:
-
-* Fetch all Projects for a Tenant.
-* Fetch all Users belonging to a Project.
-* Fetch all Frameworks enabled for a Project.
-* Fetch Executions for a specific Project.
-* Fetch Reports only for the current Project.
-* Fetch Dashboard Analytics scoped to the current Project.
-
-The API layer should automatically enforce Tenant and Project isolation rather than relying only on frontend filtering.
-
-## Authentication & Authorization
-
-After login, the authenticated user should automatically receive:
-
-* Tenant ID
-* Project ID
-* User ID
-* Assigned Roles
-* Enabled Modules
-* Workspace Context
-
-This context should remain available throughout the user's session and should be used by every API request and authorization check.
-
-Role-based permissions should always be evaluated within the current Tenant and Project.
-
-## Security Requirements
-
-A user must never be able to:
-
-* Access another Tenant's data.
-* Access another Project's data.
-* Execute another Project's Framework.
-* View another Project's Reports.
-* Access another Project's Test Suites.
-* Modify another Project's Settings.
-* Read another Project's Analytics.
-
-Every backend service must validate the Tenant ID and Project ID before performing any database operation.
-
-Frontend restrictions alone must never be considered sufficient for security.
-
-## Future Scalability
-
-This Tenant + Project architecture must become the foundation for all current and future modules, including:
-
-* Automation Testing
-* API Testing
-* Performance Testing
-* AI Services
-* Workspace Management
-* Reporting
-* Analytics
-* Scheduler
-* Notifications
-* Future Enterprise Features
-
-The entire database design, API architecture, authentication, authorization, and service layer should be built around this model from the beginning to avoid future architectural redesign.
+Do not create a generic form that exposes every field for every test type. The configuration UI must adapt to the selected engine, protocol, test type, and workload model.
 
 ---
 
-# Deliverables
+### 8. API AND BROWSER NAVIGATION TESTING
 
-Before writing any code:
+Treat API performance and browser-based UI performance as separate but related execution modes.
 
-1. Review this architecture.
-2. Identify missing requirements.
-3. Suggest enterprise-grade improvements.
-4. Point out scalability concerns.
-5. Identify security considerations.
-6. Recommend the database design.
-7. Recommend the API design.
-8. Recommend the permission model.
-9. Recommend the Workspace isolation strategy.
-10. Produce a phased implementation roadmap.
+For API performance:
+- Endpoint and multi-step workflow testing.
+- Authentication and token refresh.
+- Request correlation and dynamic test data.
+- Response validation.
+- Error-rate measurement.
+- Latency and throughput.
+- Rate limiting.
+- Request groups and endpoint-level results.
 
-Do **not** start implementation yet.
+For browser performance:
+- Browser navigation journeys.
+- Page readiness and rendering.
+- Element visibility and interaction timing.
+- Route transitions.
+- Browser network requests.
+- Frontend errors.
+- Core Web Vitals.
+- API timing versus end-to-end browser timing.
 
-This Workspace architecture will become the foundation of Testrix, so the design should be finalized before development begins.
+Support a combined scenario where browser and API executions are correlated by test ID, time window, environment, and workload configuration.
 
+Define which operations run through k6 browser functionality, which use protocol-level requests, and which require additional tooling.
 
-# Additional Core Architecture Requirements
-
-The following architectural rules must also be considered before implementation begins.
-
-## Unique Identifier Policy
-
-Every major business entity in Testrix must have its own permanent unique identifier.
-
-Examples:
-
-TEN-000001   → Tenant
-PRJ-000001   → Project
-WS-000001    → Workspace
-USR-000001   → User
-ROL-000001   → Role
-ENV-000001   → Environment
-
-These identifiers should remain immutable after creation and become the primary business identifiers throughout the platform.
-
-Workspace Name, Workspace Code, Tenant Code, and Project Code must all be validated for uniqueness according to the business rules defined for the platform.
-
-This prevents duplicate identities and ensures reliable routing, API lookups, reporting, integrations, and future scalability.
+Do not represent API response time as equivalent to complete browser navigation time.
 
 ---
 
-## Project Administration Protection
+### 9. LIVE MONITORING AND CHARTING
 
-Every Workspace must always have at least one active Project Admin.
+Inspect the existing React chart library before introducing another dependency.
 
-The system must prevent:
+Evaluate Recharts for standard React dashboards and Apache ECharts for advanced or high-volume visualization requirements.
 
-- Removing the last active Project Admin.
-- Disabling the last active Project Admin.
-- Deleting the last active Project Admin.
-- Transferring ownership without assigning another Project Admin first.
+Design the following visualizations:
 
-This guarantees that every Workspace always has an administrator capable of managing users, permissions, environments, and project configuration.
+#### Dashboard KPIs
+- Total executions.
+- Active executions.
+- Pass rate and threshold failure rate.
+- Average, p95, and p99 latency.
+- Peak throughput.
+- Error rate.
+- Queued and running jobs.
+- Runner availability.
+- Recent regressions.
 
----
+#### Live execution charts
+- Latency percentiles over time.
+- Requests per second.
+- Iterations per second.
+- Active virtual users.
+- Target versus achieved arrival rate.
+- Dropped iterations.
+- Failed requests and error rate.
+- CPU and memory utilization.
+- Network utilization.
+- Endpoint/group-level latency.
+- Execution phase timeline.
+- Threshold breach events.
 
-## Authorization Flow
+#### Historical analytics
+- Daily and weekly execution trends.
+- Pass/fail distribution.
+- Latency regression trends.
+- Throughput comparisons.
+- Test-type distribution.
+- Engine usage.
+- Slowest endpoints.
+- Baseline versus current run.
+- Release-to-release performance.
+- Resource utilization comparisons.
 
-Authentication and authorization should always follow this sequence:
+#### Advanced visualizations
+- Latency histograms.
+- Heatmaps.
+- Scatter plots.
+- Endpoint ranking.
+- Resource-versus-latency correlation.
+- Capacity curves.
+- Load-versus-error-rate curves.
+- Performance degradation over time.
 
-Authenticated User
+For every chart, specify:
+- Data source.
+- Metric definition.
+- Aggregation window.
+- API response schema.
+- Update frequency.
+- Empty/loading/error states.
+- Whether it supports live or completed runs.
+- Whether data is real or derived.
+- Any sampling, aggregation, or downsampling required.
 
-↓
+Never use invented demo values as production metrics.
 
-Tenant
+Define the semantics of average, p50, p90, p95, p99, maximum, requests/sec, transactions/sec, error rate, and dropped iterations.
 
-↓
+Explain why percentiles cannot generally be averaged across time windows or distributed workers without appropriate histogram/sketch or raw-sample aggregation.
 
-Project
+Use Server-Sent Events for one-way live updates where suitable. Use WebSockets only when bidirectional communication materially benefits the application.
 
-↓
-
-Assigned Roles
-
-↓
-
-Permissions
-
-↓
-
-Enabled Modules
-
-↓
-
-Requested Resource
-
-Every API request must be validated using this complete authorization chain before any business logic or database operation is performed.
-
-The frontend should never be considered the source of authorization.
-
-# Future Scope
-
-The following features are intentionally outside the scope of the current implementation but should be considered during architecture design to avoid future redesign.
-
-## Workspace Enhancements
-
-- Multiple Project Admins per Workspace.
-- Workspace ownership transfer.
-- Workspace archive and restore.
-- Workspace cloning.
-- Workspace templates.
-- Workspace import and export.
-
----
-
-## Organization Management
-
-- Multiple Organizations (Tenants).
-- Organization administrators.
-- Multiple Projects under one Organization.
-- Organization-level analytics.
-- Organization-wide reporting.
-
----
-
-## User & Identity
-
-- User invitation by email.
-- Self-registration through invitation links.
-- Multi-factor authentication (MFA).
-- Single Sign-On (Azure AD, Google, Okta).
-- LDAP / Active Directory integration.
-- Password policy management.
+Do not stream every raw metric sample directly to React. Define a controlled aggregation and update strategy.
 
 ---
 
-## Platform Administration
+### 10. PERFORMANCE SCHEDULER REDESIGN
 
-- Billing & Subscription Management.
-- License Management.
-- Usage Analytics.
-- Audit Logs.
-- Platform Monitoring.
-- Feature Flags.
-- Maintenance Mode.
+The current scheduler is primarily intended for API testing. Evaluate it and evolve it into a reusable execution scheduler without unnecessarily breaking existing API scheduling.
 
----
+Support:
+- Manual execution.
+- Run now.
+- One-time schedules.
+- Recurring schedules.
+- Cron-based schedules.
+- Daily and weekly schedules.
+- Explicit timezone.
+- Start and end dates.
+- Schedule enable/disable.
+- Next-run preview.
+- Missed-run policy.
+- Retry policy.
+- Execution timeout.
+- Concurrency policies.
+- Project and tenant quotas.
+- Queue priority and fairness.
+- Runner capacity checks.
+- Cancellation.
+- Duplicate-trigger prevention.
+- Distributed locking or equivalent coordination.
+- Worker heartbeats.
+- Failure recovery.
+- Audit history.
+- Notifications.
+- Scheduled regression suites.
 
-## Testing Platform Enhancements
+Clearly separate:
+- Schedule trigger.
+- Queue admission.
+- Job dispatch.
+- Worker execution.
+- Execution retry.
+- Performance outcome.
 
-- Mobile Automation.
-- Desktop Automation.
-- Security Testing.
-- Accessibility Testing.
-- Visual Testing.
-- AI-assisted Test Generation.
-- AI-assisted Failure Analysis.
-- Shared Test Libraries.
-- Cross-Framework Analytics.
+A failed performance threshold is not automatically an execution failure and must not trigger an infrastructure retry.
 
----
+Evaluate the existing scheduler first. Consider Spring scheduling, Quartz, or an external queue only according to demonstrated requirements.
 
-## Collaboration
+If a persistent queue is needed, compare a MySQL-backed approach, Redis/BullMQ-equivalent infrastructure where compatible, and a Java-native messaging option. Do not introduce multiple overlapping schedulers or queues without justification.
 
-- Project Notifications.
-- Team Activity Feed.
-- Comments on Executions and Reports.
-- Mentions and Assignments.
-- Approval Workflows.
-
----
-
-## Enterprise Integrations
-
-- Jira
-- Azure DevOps
-- GitHub
-- GitLab
-- Bitbucket
-- Slack
-- Microsoft Teams
-- Email Notifications
-- Webhooks
-
----
-
-## Reporting & Analytics
-
-- Organization-wide dashboards.
-- Cross-project analytics (Super Admin only).
-- Executive dashboards.
-- Custom report builder.
-- Scheduled reports.
-- Historical trends.
-- Predictive analytics.
+Define queue/job states, idempotency keys, concurrency controls, retry rules, and failure recovery.
 
 ---
 
-## AI Features
+### 11. RUNNER MANAGEMENT AND DISTRIBUTED EXECUTION
 
-- AI Workspace Assistant.
-- AI Test Recommendations.
-- AI Failure Classification.
-- AI Report Summaries.
-- AI Root Cause Analysis.
-- AI Execution Insights.
+Design a runner management subsystem supporting:
+
+- k6 workers.
+- Future JMeter workers.
+- Engine and version compatibility.
+- Runner registration.
+- Heartbeat and health status.
+- CPU and memory availability.
+- Worker capacity.
+- Maximum concurrent executions.
+- Project/tenant assignment.
+- Execution cancellation.
+- Worker loss detection.
+- Stale-job recovery.
+- Container isolation.
+- Artifact collection.
+- Worker logs.
+- Engine-specific configuration.
+
+The dispatcher must select eligible workers based on capability, availability, capacity, project limits, and execution requirements.
+
+Define a safe worker protocol, including authenticated job assignment, status updates, heartbeat, cancellation, and final result delivery.
+
+Ensure workers cannot execute arbitrary host commands or access unrelated projects' secrets and artifacts.
+
+Explain how runner saturation differs from target-system saturation and how the UI should expose both.
 
 ---
 
-## Long-Term Vision
+### 12. MYSQL DATA MODEL
 
-The architecture should be designed today so that all future capabilities can be added without requiring fundamental changes to the database design, authentication model, authorization model, workspace isolation, tenant isolation, or API architecture.
+Inspect the current schema before designing new tables.
 
-The current implementation should establish a scalable foundation that supports the long-term evolution of Testrix into a complete enterprise testing platform.
+Evaluate the following logical entities:
 
+- Test definitions.
+- Scenarios.
+- Script versions.
+- Test data references.
+- Workload profiles.
+- Threshold definitions.
+- Schedules.
+- Scheduled execution records.
+- Executions.
+- Execution phases.
+- Execution events.
+- Endpoint summaries.
+- Threshold results.
+- Runner registry.
+- Artifact metadata.
+- Baselines.
+- Notifications.
+- Audit records.
 
-kuch important thing 
-## User & Role Assignment Model
+For each entity, define:
+- Purpose.
+- Columns and types.
+- Primary and foreign keys.
+- Unique constraints.
+- Indexes.
+- Relationships.
+- Lifecycle and retention.
+- Tenant/project ownership.
+- Migration requirements.
 
-Users are managed at the Project level, while Roles are managed at the Platform level.
+Use MySQL for configuration, scheduling metadata, execution lifecycle, final summaries, endpoint aggregates, and artifact references.
 
-### Platform Roles
+Do not store every high-frequency time-series sample in MySQL by default. Evaluate Prometheus or another suitable metrics store for time-series telemetry and object storage for large raw results and reports.
 
-Role definitions are global across the entire Testrix platform.
+Define how the application behaves if metrics storage is temporarily unavailable while an engine is running.
 
-Only the Super Admin can create, modify, or remove platform roles.
+---
 
-These roles are shared across all Projects.
+### 13. METRICS PIPELINE AND RESULT NORMALIZATION
 
-Default platform roles include:
+Design a complete metrics pipeline:
 
-- Project Admin
-- QA Lead
-- Automation Engineer
-- Viewer
+Engine output
+→ Collector
+→ Validation
+→ Normalization
+→ Time-window aggregation
+→ Time-series persistence
+→ Threshold evaluation
+→ Live updates
+→ Final summaries
+→ Reports and analytics.
 
-Additional roles may be created by the Super Admin as business requirements evolve.
+For k6, evaluate supported built-in metrics, custom metrics, tags, thresholds, and output mechanisms.
 
-### Project-Based User Assignment
+For JMeter, evaluate JTL output and the mapping of available sample data into the common result schema.
 
-Users belong to one or more Projects.
+Preserve:
+- Raw artifacts.
+- Engine-specific metadata.
+- Script/test-plan version.
+- Workload configuration.
+- Environment.
+- Execution start/end times.
+- Runner identity.
+- Engine version.
+- Threshold results.
 
-A user can be assigned different roles in different Projects.
+Define a common execution status separately from the performance outcome.
 
-Role assignments are always maintained at the Project level and are never shared automatically between Projects.
+Suggested execution states:
+QUEUED, PREPARING, STARTING, RUNNING, STOPPING, FINALIZING, COMPLETED, FAILED, CANCELLED, TIMED_OUT, PARTIAL.
 
-Example:
+Suggested performance outcomes:
+PASS, FAIL, INCONCLUSIVE, NOT_EVALUATED.
 
-User: Naveen
+Define the rules for missing metrics, insufficient samples, partial runs, worker crashes, and threshold evaluation.
 
-Project: MP Housing Board ERP
-Role: Project Admin
+---
 
-Project: Revenue ERP
-Role: Viewer
+### 14. THRESHOLDS, BASELINES, AND REGRESSION DETECTION
 
-Project: Citizen Portal
-Role: QA Lead
+Implement configurable performance budgets and threshold evaluation.
 
-This allows the same user to have different responsibilities across multiple Projects while maintaining complete project isolation.
+Examples include:
+- p95 response time below a configured limit.
+- Error rate below a configured percentage.
+- Minimum required throughput.
+- Browser LCP target.
+- Endpoint-specific latency limits.
+- Maximum acceptable dropped-iteration rate.
+- Infrastructure resource limits where telemetry is available.
 
-### Authorization Rule
+These must be configurable rather than universal hardcoded values.
 
-Every authorization decision must be resolved using the following context:
+For every threshold, define:
+- Metric.
+- Aggregation method.
+- Time window.
+- Scope.
+- Operator.
+- Limit.
+- Severity.
+- Evaluation status.
+- Handling of missing or insufficient data.
 
-Authenticated User
-        ↓
-Tenant
-        ↓
-Project
-        ↓
-Assigned Role(s)
-        ↓
-Permissions
-        ↓
-Accessible Modules
-        ↓
-Requested Resource
+Design baseline selection, run comparison, regression percentages, tolerance bands, and confidence requirements.
 
-The same user may receive different permissions depending on the currently selected Project, even though the platform roles themselves remain common across all Projects.
+Compare runs only when workload, environment, script version, engine version, duration, and measurement conditions are sufficiently compatible.
+
+Explain the limitations of comparing p95/p99 values, especially when sample counts are low or workload profiles differ.
+
+Do not classify random fluctuations as definite regressions without an appropriate comparison policy.
+
+---
+
+### 15. SECURITY AND OPERATIONAL SAFETY
+
+The platform generates traffic against configured targets. Safety controls are mandatory.
+
+Implement or recommend:
+- Target URL allowlists.
+- Environment authorization.
+- Private network and SSRF protections.
+- Credential and secret management.
+- Tenant isolation.
+- CPU, memory, duration, and concurrency limits.
+- Maximum request-rate limits.
+- Execution timeout.
+- Emergency cancellation.
+- Artifact access control.
+- Secret redaction in logs.
+- Audit trails.
+- Worker/container isolation.
+- Dependency and script validation.
+- Safe handling of uploaded JMX, JavaScript, and data files.
+
+Do not permit unrestricted execution of arbitrary shell commands.
+
+Do not execute load tests against unauthorized external systems. Provide explicit confirmation and stronger limits for production targets.
+
+Define safe default limits and the approval process for increasing them.
+
+---
+
+### 16. CI/CD AND AUTOMATION INTEGRATION
+
+Evaluate how Testrix can support:
+- Manual execution.
+- Scheduled performance suites.
+- Git-based script versioning.
+- CI/CD-triggered runs.
+- Release validation.
+- Baseline comparison.
+- Performance regression quality gates.
+- Result APIs and webhooks.
+- Notifications.
+- Execution history linked to builds/releases.
+
+Define how an external pipeline submits a test, receives an execution ID, waits for completion, and obtains the final outcome.
+
+Do not mark a release as failed solely because the engine process returned a non-zero code; distinguish threshold failures from script errors, infrastructure failures, and intentional cancellation.
+
+---
+
+### 17. TESTING THE TESTING PLATFORM
+
+The Testrix platform itself must be tested.
+
+Define automated tests for:
+- Unit-level workload configuration validation.
+- Engine adapter behaviour.
+- Execution lifecycle transitions.
+- Scheduler idempotency.
+- Concurrent job dispatch.
+- Worker heartbeat and loss.
+- Cancellation and timeout.
+- Metrics normalization.
+- Threshold calculations.
+- Percentile aggregation.
+- API authorization.
+- Tenant isolation.
+- Database migrations.
+- Artifact persistence.
+- SSE reconnect behaviour.
+- Frontend charts with missing or partial data.
+- End-to-end k6 execution.
+- Future JMeter integration.
+- Failure injection and recovery.
+
+Include tests for edge cases such as:
+- Zero requests.
+- Empty metrics.
+- Missing percentiles.
+- Worker crashes mid-run.
+- Duplicate scheduler triggers.
+- Database unavailable during finalization.
+- Metrics backend unavailable.
+- Invalid script.
+- Invalid target URL.
+- Insufficient samples.
+- Partial result files.
+- Execution exceeding the permitted duration.
+
+---
+
+### 18. REQUIRED OUTPUT FORMAT
+
+Produce the analysis in the following order:
+
+1. Executive summary.
+2. Existing repository audit.
+3. Current feature inventory.
+4. Missing-feature and risk matrix.
+5. Complete performance-testing taxonomy.
+6. Engine capability matrix for k6 and JMeter.
+7. Target architecture and diagrams.
+8. Backend package architecture.
+9. Frontend information architecture.
+10. Detailed execution lifecycle.
+11. Test Studio configuration design.
+12. Workload model and template mapping.
+13. API and browser testing implementation.
+14. Chart and statistics specification.
+15. Scheduler redesign.
+16. Runner and distributed execution architecture.
+17. MySQL schema and migrations.
+18. Metrics pipeline and storage strategy.
+19. Thresholds, baselines, and regression analysis.
+20. Security and operational controls.
+21. Required libraries and dependency justification.
+22. API endpoint inventory with request/response examples.
+23. Failure handling and recovery strategy.
+24. Testing strategy for the platform itself.
+25. Phased implementation roadmap.
+26. File-level change plan.
+27. Acceptance criteria for each phase.
+28. Risks, trade-offs, and unresolved technical decisions.
+
+Use diagrams, tables, realistic examples, pseudocode, and representative API contracts where useful.
+
+Distinguish verified repository facts from recommendations and assumptions.
+
+Cite official documentation for current engine capabilities, framework integrations, and important technical constraints when external research is available.
+
+Do not invent repository findings, performance numbers, benchmarks, or implementation status.
+
+---
+
+### 19. IMPLEMENTATION ROADMAP
+
+Propose a staged delivery plan:
+
+Phase 0: Existing codebase audit and architecture validation.
+
+Phase 1: Common execution lifecycle, engine abstraction, validation, and reliable k6 execution.
+
+Phase 2: Complete workload templates, thresholds, and script management.
+
+Phase 3: Live monitoring, result normalization, and detailed reports.
+
+Phase 4: Scheduler enhancement, persistent queueing, and safe dispatch.
+
+Phase 5: Browser performance and Core Web Vitals.
+
+Phase 6: Infrastructure monitoring and historical analytics.
+
+Phase 7: Distributed workers and capacity-aware execution.
+
+Phase 8: JMeter adapter and advanced protocol support.
+
+Phase 9: CI/CD, regression gates, enterprise security, and operational hardening.
+
+Adjust this order if repository evidence shows that an earlier dependency must be implemented first.
+
+For each phase, define:
+- Scope.
+- Dependencies.
+- Existing files to modify.
+- New files to add.
+- Libraries required.
+- Database changes.
+- APIs.
+- Frontend changes.
+- Tests.
+- Acceptance criteria.
+- Risks.
+- Definition of done.
+
+Do not assume all phases must be completed before useful functionality can ship.
+
+---
+
+### 20. EXECUTION INSTRUCTIONS
+
+Start by auditing the actual repository.
+
+Do not immediately generate a large amount of code.
+
+Do not delete or rewrite existing working features without evidence.
+
+Do not introduce duplicate scheduling, execution, reporting, or authentication systems.
+
+Do not add libraries without explaining their purpose and compatibility.
+
+Do not claim that a feature is implemented unless you can verify it.
+
+Do not expose raw high-frequency metrics directly to the frontend without an aggregation strategy.
+
+Do not treat protocol-level and browser-level virtual users as equivalent.
+
+Do not confuse execution failure with performance-threshold failure.
+
+Do not assume every performance test type requires a separate engine.
+
+Do not assume every listed protocol is natively supported by k6 or JMeter.
+
+First deliver the complete repository audit, architecture analysis, capability matrix, implementation plan, and prioritized file-level change list.
+
+Then identify the first implementation phase and its dependencies. Proceed with code changes only when explicitly authorized, or when the surrounding development workflow already authorizes implementation.
+
+The final goal is a maintainable, secure, scalable Testrix Performance Testing platform built on React, Spring Boot, and MySQL, with k6 as the initial engine and JMeter as a planned additional engine, providing reliable execution, comprehensive metrics, meaningful visual analytics, scheduling, browser performance testing, and a clear path to distributed load generation.

@@ -39,6 +39,7 @@ public class FrameworkRunnerService {
     // playwrightFrameworkPath/frameworkPath above. Null/blank on the job means unchanged legacy
     // behavior — this is additive, not a replacement.
     private static String projectFrameworksRoot = "/app/project-frameworks";
+    private static String runnerWorkspacesRoot = "runner-workspaces";
     private static String executionManagerUrl = "http://localhost:8090";
     private static final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
@@ -103,9 +104,15 @@ public class FrameworkRunnerService {
             projectFrameworksRoot = pfrEnv;
         }
 
+        String rwrEnv = System.getenv("RUNNER_WORKSPACES_ROOT");
+        if (rwrEnv != null && !rwrEnv.isEmpty()) {
+            runnerWorkspacesRoot = rwrEnv;
+        }
+
         System.out.println("Starting Framework Runner Service using path: " + frameworkPath);
         System.out.println("Playwright framework path: " + playwrightFrameworkPath);
         System.out.println("Project frameworks root: " + projectFrameworksRoot);
+        System.out.println("Runner workspaces root: " + runnerWorkspacesRoot);
 
         HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
 
@@ -172,12 +179,32 @@ public class FrameworkRunnerService {
         running = true;
         currentJobId = executionId;
 
-        // A job carrying its own Test Engine's framework_path resolves against
-        // projectFrameworksRoot instead of the one static, shared checkout — blank/absent means
-        // unchanged legacy behavior (see the projectFrameworksRoot field comment above).
-        String resolvedCwd = (jobFrameworkPath != null && !jobFrameworkPath.isBlank())
-                ? Paths.get(projectFrameworksRoot, jobFrameworkPath).toString()
-                : null;
+        String sourceType = getJsonVal(body, "sourceType");
+        String gitRepoUrl = getJsonVal(body, "gitRepoUrl");
+        String gitBranch = getJsonVal(body, "gitBranch");
+        String gitAuthType = getJsonVal(body, "gitAuthType");
+        String gitToken = getJsonVal(body, "gitToken");
+        String gitUsername = getJsonVal(body, "gitUsername");
+
+        // When sourceType is GIT_REMOTE, clone on-demand into an isolated ephemeral workspace.
+        // Otherwise, resolve framework_path under projectFrameworksRoot (or static fallback).
+        String resolvedCwd;
+        if ("GIT_REMOTE".equalsIgnoreCase(sourceType) && gitRepoUrl != null && !gitRepoUrl.isBlank()) {
+            try {
+                resolvedCwd = prepareGitWorkspace(executionId, gitRepoUrl, gitBranch, gitToken, gitUsername, framework);
+            } catch (Exception e) {
+                System.err.println("Failed to prepare Git workspace for job " + executionId + ": " + e.getMessage());
+                e.printStackTrace();
+                running = false;
+                currentJobId = "";
+                send(exchange, 500, "{\"error\":\"Git workspace preparation failed: " + e.getMessage().replace("\"", "'") + "\"}", "application/json");
+                return;
+            }
+        } else if (jobFrameworkPath != null && !jobFrameworkPath.isBlank()) {
+            resolvedCwd = Paths.get(projectFrameworksRoot, jobFrameworkPath).toString();
+        } else {
+            resolvedCwd = null;
+        }
 
         // Dispatch to the right engine's strategy. Adding a future framework means adding
         // one more branch here (plus its own runXyz method) — nothing else in the pipeline
@@ -420,6 +447,112 @@ public class FrameworkRunnerService {
             });
         } catch (IOException e) {
             System.err.println("Failed to clear stale Playwright test-results directory: " + e.getMessage());
+        }
+    }
+
+    private static String prepareGitWorkspace(String executionId, String gitRepoUrl, String gitBranch,
+                                              String gitToken, String gitUsername, String framework) throws Exception {
+        Path workspaceDir = Paths.get(runnerWorkspacesRoot, executionId);
+        if (Files.exists(workspaceDir)) {
+            deleteDirectoryRecursively(workspaceDir);
+        }
+        Files.createDirectories(workspaceDir);
+
+        String branch = (gitBranch != null && !gitBranch.isBlank()) ? gitBranch : "main";
+        System.out.println("[GIT-CLONE] Cloning repo: " + sanitizeUrl(gitRepoUrl) + " (branch: " + branch + ") into " + workspaceDir);
+
+        List<String> cloneCmd = new ArrayList<>();
+        cloneCmd.add("git");
+
+        // Authenticated clone using Authorization header without exposing token in git configs
+        if (gitToken != null && !gitToken.isBlank() && !gitRepoUrl.startsWith("file:")) {
+            if (gitUsername != null && !gitUsername.isBlank()) {
+                String raw = gitUsername.trim() + ":" + gitToken.trim();
+                String encoded = java.util.Base64.getEncoder().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+                cloneCmd.add("-c");
+                cloneCmd.add("http.extraHeader=Authorization: Basic " + encoded);
+            } else {
+                cloneCmd.add("-c");
+                cloneCmd.add("http.extraHeader=Authorization: Bearer " + gitToken.trim());
+            }
+        }
+
+        cloneCmd.add("clone");
+        cloneCmd.add("--depth");
+        cloneCmd.add("1");
+        cloneCmd.add("-b");
+        cloneCmd.add(branch);
+        cloneCmd.add(gitRepoUrl);
+        cloneCmd.add(workspaceDir.toAbsolutePath().toString());
+
+        ProcessBuilder pb = new ProcessBuilder(cloneCmd);
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        StringBuilder gitOutput = new StringBuilder();
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+            String l;
+            while ((l = r.readLine()) != null) {
+                System.out.println("[GIT] " + l);
+                if (gitOutput.length() < 500) {
+                    if (!gitOutput.isEmpty()) gitOutput.append(" ");
+                    gitOutput.append(l);
+                }
+            }
+        }
+        int code = p.waitFor();
+        if (code != 0) {
+            String detail = gitOutput.isEmpty() ? "exit code " + code : gitOutput.toString();
+            throw new RuntimeException("Git clone failed: " + detail);
+        }
+
+        // If Playwright framework, install dependencies if package.json exists in cloned repo
+        if ("PLAYWRIGHT".equalsIgnoreCase(framework) && Files.exists(workspaceDir.resolve("package.json"))) {
+            System.out.println("[GIT-CLONE] Installing Playwright dependencies in cloned workspace...");
+            List<String> npmCmd = new ArrayList<>();
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.contains("win")) {
+                npmCmd.addAll(List.of("cmd.exe", "/c", "npm", "install", "--no-audit", "--no-fund"));
+            } else {
+                npmCmd.addAll(List.of("npm", "install", "--no-audit", "--no-fund"));
+            }
+            ProcessBuilder npmPb = new ProcessBuilder(npmCmd);
+            npmPb.directory(workspaceDir.toFile());
+            npmPb.redirectErrorStream(true);
+            Process npmProc = npmPb.start();
+            StringBuilder npmOutput = new StringBuilder();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(npmProc.getInputStream(), StandardCharsets.UTF_8))) {
+                String l;
+                while ((l = r.readLine()) != null) {
+                    System.out.println("[NPM] " + l);
+                    if (npmOutput.length() < 300) {
+                        if (!npmOutput.isEmpty()) npmOutput.append(" ");
+                        npmOutput.append(l);
+                    }
+                }
+            }
+            int npmCode = npmProc.waitFor();
+            if (npmCode != 0) {
+                System.err.println("[NPM-WARN] npm install exited with code: " + npmCode + " (" + npmOutput + ")");
+            }
+        }
+
+        System.out.println("[GIT-CLONE] Workspace ready at " + workspaceDir);
+        return workspaceDir.toAbsolutePath().toString();
+    }
+
+    private static String sanitizeUrl(String url) {
+        if (url == null) return "";
+        return url.replaceAll("://[^@]+@", "://***@");
+    }
+
+    private static void deleteDirectoryRecursively(Path dir) {
+        if (!Files.exists(dir)) return;
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try { Files.deleteIfExists(p); } catch (IOException ignored) {}
+            });
+        } catch (IOException e) {
+            System.err.println("Failed to clean directory " + dir + ": " + e.getMessage());
         }
     }
 

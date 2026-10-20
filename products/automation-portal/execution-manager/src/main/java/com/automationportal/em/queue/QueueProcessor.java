@@ -215,7 +215,14 @@ public class QueueProcessor {
                 job.getFramework(),
                 job.getBrowser(),
                 job.getTagFilter(),
-                job.getFrameworkPath()
+                job.getFrameworkPath(),
+                job.getSourceType(),
+                job.getGitRepoUrl(),
+                job.getGitBranch(),
+                job.getGitAuthType(),
+                job.getGitToken(),
+                job.getGitUsername(),
+                job.getLocalAgentId()
         );
 
         if (success) {

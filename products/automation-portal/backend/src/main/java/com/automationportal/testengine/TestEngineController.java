@@ -32,6 +32,7 @@ public class TestEngineController {
     private final EntityIdGeneratorService entityIdGeneratorService;
     private final StarterKitService starterKitService;
     private final PortalAutomationProperties automationProperties;
+    private final com.automationportal.security.EncryptionService encryptionService;
 
     public TestEngineController(TestEngineRepository repository,
                                 TestEngineCredentialService credentialService,
@@ -39,7 +40,8 @@ public class TestEngineController {
                                 CurrentUserService currentUserService,
                                 EntityIdGeneratorService entityIdGeneratorService,
                                 StarterKitService starterKitService,
-                                PortalAutomationProperties automationProperties) {
+                                PortalAutomationProperties automationProperties,
+                                com.automationportal.security.EncryptionService encryptionService) {
         this.repository = repository;
         this.credentialService = credentialService;
         this.currentProjectService = currentProjectService;
@@ -47,13 +49,27 @@ public class TestEngineController {
         this.entityIdGeneratorService = entityIdGeneratorService;
         this.starterKitService = starterKitService;
         this.automationProperties = automationProperties;
+        this.encryptionService = encryptionService;
+    }
+
+    private TestEngineDtos.Summary toSummary(TestEngine e, String keyPrefix) {
+        String maskedToken = null;
+        if (e.getGitTokenEncrypted() != null && !e.getGitTokenEncrypted().isBlank()) {
+            try {
+                String decrypted = encryptionService.decrypt(e.getGitTokenEncrypted());
+                maskedToken = com.automationportal.security.EncryptionService.maskToken(decrypted);
+            } catch (Exception ex) {
+                maskedToken = "******";
+            }
+        }
+        return TestEngineDtos.Summary.from(e, keyPrefix, maskedToken);
     }
 
     @GetMapping
     public ApiResponse<List<TestEngineDtos.Summary>> list() {
         Long projectId = currentProjectService.requireProjectId();
         return ApiResponse.ok(repository.findByProjectId(projectId).stream()
-                .map(e -> TestEngineDtos.Summary.from(e, credentialService.activeKeyPrefix(e.getId()).orElse(null)))
+                .map(e -> toSummary(e, credentialService.activeKeyPrefix(e.getId()).orElse(null)))
                 .toList());
     }
 
@@ -72,7 +88,7 @@ public class TestEngineController {
     @GetMapping("/{id}")
     public ApiResponse<TestEngineDtos.Summary> get(@PathVariable Long id) {
         TestEngine engine = findOwned(id);
-        return ApiResponse.ok(TestEngineDtos.Summary.from(engine, credentialService.activeKeyPrefix(engine.getId()).orElse(null)));
+        return ApiResponse.ok(toSummary(engine, credentialService.activeKeyPrefix(engine.getId()).orElse(null)));
     }
 
     @PostMapping
@@ -91,13 +107,25 @@ public class TestEngineController {
         engine.setEndpoint(body.endpoint());
         engine.setFrameworkPath(validateFrameworkPath(body.frameworkPath()));
         engine.setReportPath(body.reportPath());
+
+        // Multi-source mode fields
+        engine.setSourceType(body.sourceType() != null ? body.sourceType() : SourceType.LOCAL_DEV);
+        engine.setGitRepoUrl(body.gitRepoUrl() != null ? body.gitRepoUrl().trim() : null);
+        engine.setGitBranch(body.gitBranch() != null && !body.gitBranch().isBlank() ? body.gitBranch().trim() : "main");
+        engine.setGitAuthType(body.gitAuthType() != null ? body.gitAuthType() : GitAuthType.NONE);
+        if (body.gitToken() != null && !body.gitToken().isBlank()) {
+            engine.setGitTokenEncrypted(encryptionService.encrypt(body.gitToken().trim()));
+        }
+        engine.setGitUsername(body.gitUsername() != null ? body.gitUsername().trim() : null);
+        engine.setLocalAgentId(body.localAgentId() != null ? body.localAgentId().trim() : null);
+
         engine.setCreatedByUserId(currentUserService.currentUser().id());
         repository.save(engine);
 
         TestEngineCredentialService.IssuedCredential issued = credentialService.issue(engine.getId());
 
         return ApiResponse.created("Test Engine registered — copy the key now, it will not be shown again", Map.of(
-                "engine", TestEngineDtos.Summary.from(engine, issued.keyPrefix()),
+                "engine", toSummary(engine, issued.keyPrefix()),
                 "credential", new TestEngineDtos.CredentialIssued(issued.plaintextKey(), issued.keyPrefix(), Instant.now())
         ));
     }
@@ -111,8 +139,20 @@ public class TestEngineController {
         engine.setEndpoint(body.endpoint());
         engine.setFrameworkPath(validateFrameworkPath(body.frameworkPath()));
         engine.setReportPath(body.reportPath());
+
+        // Multi-source mode updates
+        if (body.sourceType() != null) engine.setSourceType(body.sourceType());
+        if (body.gitRepoUrl() != null) engine.setGitRepoUrl(body.gitRepoUrl().trim());
+        if (body.gitBranch() != null && !body.gitBranch().isBlank()) engine.setGitBranch(body.gitBranch().trim());
+        if (body.gitAuthType() != null) engine.setGitAuthType(body.gitAuthType());
+        if (body.gitToken() != null && !body.gitToken().isBlank()) {
+            engine.setGitTokenEncrypted(encryptionService.encrypt(body.gitToken().trim()));
+        }
+        if (body.gitUsername() != null) engine.setGitUsername(body.gitUsername().trim());
+        if (body.localAgentId() != null) engine.setLocalAgentId(body.localAgentId().trim());
+
         repository.save(engine);
-        return ApiResponse.ok(TestEngineDtos.Summary.from(engine, credentialService.activeKeyPrefix(engine.getId()).orElse(null)));
+        return ApiResponse.ok(toSummary(engine, credentialService.activeKeyPrefix(engine.getId()).orElse(null)));
     }
 
     /**
@@ -217,6 +257,147 @@ public class TestEngineController {
         response.setContentLength(zip.length);
         response.getOutputStream().write(zip);
         response.getOutputStream().flush();
+    }
+
+    @PostMapping("/test-git-connection")
+    public ApiResponse<TestEngineDtos.TestGitConnectionResult> testGitConnection(@RequestBody TestEngineDtos.TestGitConnectionRequest body) {
+        if (body.gitRepoUrl() == null || body.gitRepoUrl().isBlank()) {
+            throw new IllegalArgumentException("Git repository URL is required");
+        }
+        String url = body.gitRepoUrl().trim();
+        String branch = body.gitBranch() != null && !body.gitBranch().isBlank() ? body.gitBranch().trim() : "main";
+        String token = body.gitToken() != null ? body.gitToken().trim() : null;
+        String username = body.gitUsername() != null ? body.gitUsername().trim() : null;
+
+        try {
+            List<String> cmd = new java.util.ArrayList<>();
+            cmd.add("git");
+            if (token != null && !token.isBlank() && !url.startsWith("file:")) {
+                if (username != null && !username.isBlank()) {
+                    String raw = username + ":" + token;
+                    String encoded = java.util.Base64.getEncoder().encodeToString(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    cmd.add("-c");
+                    cmd.add("http.extraHeader=Authorization: Basic " + encoded);
+                } else {
+                    cmd.add("-c");
+                    cmd.add("http.extraHeader=Authorization: Bearer " + token);
+                }
+            }
+            cmd.add("ls-remote");
+            cmd.add("--heads");
+            cmd.add(url);
+            cmd.add(branch);
+
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            StringBuilder out = new StringBuilder();
+            try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    if (out.length() < 1000) {
+                        out.append(line).append("\n");
+                    }
+                }
+            }
+            boolean finished = p.waitFor(12, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(false, "Connection timed out after 12 seconds. Please check the repository URL and network accessibility.", branch, -1));
+            }
+            int exitCode = p.exitValue();
+            if (exitCode == 0) {
+                String outputStr = out.toString();
+                if (!outputStr.isBlank() && outputStr.contains(branch)) {
+                    return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(true, "Successfully connected to repository and verified branch '" + branch + "'!", branch, 0));
+                } else {
+                    return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(true, "Successfully connected to repository (verified connection to remote).", branch, 0));
+                }
+            } else {
+                String msg = out.toString().replaceAll("(?i)(bearer|basic|token|ghp_)[^\\s]+", "******");
+                if (msg.contains("Authentication failed") || msg.contains("401") || msg.contains("403")) {
+                    return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(false, "Authentication failed. Please verify your Personal Access Token or credentials.", branch, exitCode));
+                }
+                return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(false, "Git remote check failed: " + msg.trim(), branch, exitCode));
+            }
+        } catch (java.io.IOException e) {
+            return testGitConnectionViaHttp(url, token, username, branch);
+        } catch (Exception e) {
+            return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(false, "Error verifying repository: " + e.getMessage(), branch, -1));
+        }
+    }
+
+    private ApiResponse<TestEngineDtos.TestGitConnectionResult> testGitConnectionViaHttp(String url, String token, String username, String branch) {
+        try {
+            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(8))
+                    .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                    .build();
+
+            String infoRefsUrl = url.endsWith(".git") ? url + "/info/refs?service=git-upload-pack" : url + ".git/info/refs?service=git-upload-pack";
+            java.net.http.HttpRequest.Builder reqBuilder = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(infoRefsUrl))
+                    .timeout(java.time.Duration.ofSeconds(10))
+                    .GET();
+
+            if (token != null && !token.isBlank()) {
+                if (username != null && !username.isBlank()) {
+                    String raw = username + ":" + token;
+                    String encoded = java.util.Base64.getEncoder().encodeToString(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    reqBuilder.header("Authorization", "Basic " + encoded);
+                } else {
+                    reqBuilder.header("Authorization", "Bearer " + token);
+                }
+            }
+
+            java.net.http.HttpResponse<String> resp = client.send(reqBuilder.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() == 200) {
+                return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(true, "Successfully connected to repository via Git HTTP protocol!", branch, 0));
+            } else if (resp.statusCode() == 401 || resp.statusCode() == 403) {
+                return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(false, "Authentication required or invalid token (HTTP " + resp.statusCode() + ").", branch, resp.statusCode()));
+            } else if (resp.statusCode() == 404) {
+                return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(false, "Repository not found at URL (HTTP 404).", branch, 404));
+            } else {
+                return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(false, "Git HTTP check returned status: " + resp.statusCode(), branch, resp.statusCode()));
+            }
+        } catch (Exception ex) {
+            return ApiResponse.ok(new TestEngineDtos.TestGitConnectionResult(false, "Connection check failed: " + ex.getMessage(), branch, -1));
+        }
+    }
+
+    @PostMapping("/verify-folder")
+    public ApiResponse<Map<String, Object>> verifyFolder(@RequestBody TestEngineDtos.VerifyFolderRequest body) {
+        if (body.frameworkPath() == null || body.frameworkPath().isBlank()) {
+            throw new IllegalArgumentException("Framework folder path is required");
+        }
+        String validated = validateFrameworkPath(body.frameworkPath());
+        String root = automationProperties.getProjectFrameworksRoot();
+        if (root == null || root.isBlank()) {
+            root = "project-frameworks";
+        }
+        java.nio.file.Path targetDir = java.nio.file.Path.of(root, validated);
+        boolean exists = java.nio.file.Files.isDirectory(targetDir);
+        return ApiResponse.ok(Map.of(
+            "exists", exists,
+            "frameworkPath", validated,
+            "root", root,
+            "resolvedPath", targetDir.toAbsolutePath().toString(),
+            "message", exists ? "Framework directory verified successfully on server!" : "Directory '" + validated + "' does not exist under '" + root + "'."
+        ));
+    }
+
+    @PostMapping("/{id}/agent-token")
+    public ApiResponse<Map<String, String>> generateAgentToken(@PathVariable Long id) {
+        TestEngine engine = findOwned(id);
+        String token = "tx_agent_" + java.util.UUID.randomUUID().toString().replace("-", "");
+        engine.setLocalAgentId(token);
+        engine.setLocalAgentStatus("CONFIGURED");
+        repository.save(engine);
+        return ApiResponse.ok(Map.of(
+            "token", token,
+            "status", "CONFIGURED",
+            "command", "npx @testrix/agent start --token=" + token
+        ));
     }
 
     private TestEngine findOwned(Long id) {
