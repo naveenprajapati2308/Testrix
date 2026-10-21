@@ -15,6 +15,7 @@ import {
   Trash2,
   AlertTriangle
 } from 'lucide-react';
+import { notify } from '../../../../../../shared/ui/NotificationProvider.jsx';
 import './reports.css';
 
 export function ReportsCenter({ onSelectExecution }) {
@@ -54,8 +55,9 @@ export function ReportsCenter({ onSelectExecution }) {
       await api.deleteExecution(confirmDelete.id);
       setReports((prev) => prev.filter((r) => r.id !== confirmDelete.id));
       setConfirmDelete(null);
+      notify.success('Execution report deleted successfully.');
     } catch (e) {
-      alert('Failed to delete execution: ' + e.message);
+      notify.error('Failed to delete execution: ' + (e.message || 'Server error'));
     } finally {
       setDeleting(false);
     }
@@ -80,7 +82,7 @@ export function ReportsCenter({ onSelectExecution }) {
       const list = await api.reportsList(params);
       setReports(list);
     } catch (e) {
-      console.error("Error loading reports list", e);
+      notify.error("Error loading reports list: " + (e.message || 'Server error'));
     } finally {
       setLoading(false);
     }
@@ -97,15 +99,16 @@ export function ReportsCenter({ onSelectExecution }) {
 
   const handleCompare = async () => {
     if (!baseId || !targetId) {
-      alert("Please select both base and target executions to compare.");
+      notify.warning("Please select both base and target executions to compare.");
       return;
     }
     setIsComparing(true);
     try {
       const result = await api.compareExecutions(baseId, targetId);
       setComparisonResult(result);
+      notify.success("Comparison generated successfully.");
     } catch (e) {
-      alert("Comparison failed: " + e.message);
+      notify.error("Comparison failed: " + (e.message || 'Server error'));
     } finally {
       setIsComparing(false);
     }

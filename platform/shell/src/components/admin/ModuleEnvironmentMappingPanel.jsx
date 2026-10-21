@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api.js';
 import { Plus, Trash2, Save, Eye, EyeOff, Settings2, Globe2 } from 'lucide-react';
+import { notify, confirmDialog } from '../../../../../shared/ui/NotificationProvider.jsx';
 
 // Same masked key/value editor pattern already used by the automation-portal's
 // EnvironmentView.jsx "Framework Config" editor — reused here rather than reinvented.
@@ -171,17 +172,30 @@ export function ModuleEnvironmentMappingPanel({ mod, setNotice }) {
   const toggleEnabled = async (mapping) => {
     try {
       await api.adminUpdateModuleEnvironment(mapping.id, { ...mapping, enabled: !mapping.enabled });
+      notify.success(`Mapping ${!mapping.enabled ? 'enabled' : 'disabled'} for ${mod.name}.`);
       await load();
-    } catch (e) { setNotice(e.message); }
+    } catch (e) {
+      notify.error(e.message || 'Failed to update mapping.');
+    }
   };
 
   const removeMapping = async (mapping, env) => {
-    if (!window.confirm(`Remove the ${env.name} mapping for ${mod.name}? Any saved overrides will be lost.`)) return;
+    const ok = await confirmDialog({
+      title: 'Remove Environment Mapping?',
+      message: `Are you sure you want to remove the ${env.name} mapping for ${mod.name}? Any saved overrides will be lost.`,
+      confirmText: 'Remove Mapping',
+      cancelText: 'Cancel',
+      danger: true
+    });
+    if (!ok) return;
     try {
       await api.adminDeleteModuleEnvironment(mapping.id);
       if (expandedEnvId === env.id) setExpandedEnvId(null);
+      notify.success(`Mapping for ${env.name} removed successfully.`);
       await load();
-    } catch (e) { setNotice(e.message); }
+    } catch (e) {
+      notify.error(e.message || 'Failed to remove mapping.');
+    }
   };
 
   if (loading) {

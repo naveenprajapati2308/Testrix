@@ -156,18 +156,16 @@ public class TestEngineController {
     }
 
     /**
-     * frameworkPath is later joined server/container-side into
-     * Paths.get(projectFrameworksRoot, frameworkPath) by the Framework Runner — a Project Admin
-     * fully controls this value once the Setup Wizard exists, so it must only ever be able to
-     * resolve to a direct subfolder of that root, never escape it.
+     * Validates the framework path. Supports both absolute paths (e.g. D:\playwright-js or /opt/tests)
+     * for custom/migrated frameworks anywhere on the host, as well as relative subfolder names.
+     * Prevents malicious directory traversal via "..".
      */
     private String validateFrameworkPath(String frameworkPath) {
         if (frameworkPath == null || frameworkPath.isBlank()) return frameworkPath;
         String trimmed = frameworkPath.trim();
-        if (trimmed.contains("..") || trimmed.startsWith("/") || trimmed.startsWith("\\")
-                || trimmed.matches("^[a-zA-Z]:.*")) {
+        if (trimmed.contains("..")) {
             throw new IllegalArgumentException(
-                    "Framework path must be a plain subfolder name under the project frameworks root — not an absolute path or '..'");
+                    "Framework path cannot contain '..' directory traversal");
         }
         return trimmed;
     }
@@ -375,14 +373,20 @@ public class TestEngineController {
         if (root == null || root.isBlank()) {
             root = "project-frameworks";
         }
-        java.nio.file.Path targetDir = java.nio.file.Path.of(root, validated);
+        java.nio.file.Path targetDir;
+        java.nio.file.Path p = java.nio.file.Path.of(validated);
+        if (p.isAbsolute()) {
+            targetDir = p;
+        } else {
+            targetDir = java.nio.file.Path.of(root, validated);
+        }
         boolean exists = java.nio.file.Files.isDirectory(targetDir);
         return ApiResponse.ok(Map.of(
             "exists", exists,
             "frameworkPath", validated,
             "root", root,
             "resolvedPath", targetDir.toAbsolutePath().toString(),
-            "message", exists ? "Framework directory verified successfully on server!" : "Directory '" + validated + "' does not exist under '" + root + "'."
+            "message", exists ? "Framework directory verified successfully: " + targetDir.toAbsolutePath() : "Directory '" + validated + "' does not exist."
         ));
     }
 

@@ -30,6 +30,7 @@ import '../../../shared/ui/refreshing.css';
 import { DestinationHighlight } from './search/components/DestinationHighlight.jsx';
 import { registerAction } from './search/searchActions.js';
 import { MODULE_COLOR } from './search/core/searchTypes.js';
+import { notify as globalNotify } from '../../../shared/ui/NotificationProvider.jsx';
 import appLogo from './assets/testrix_logo.png';
 
 const authHeader = () => {
@@ -83,7 +84,13 @@ const parseHashRoute = () => {
   if (head === 'automation-settings') {
     return { ...DEFAULT_ROUTE, page: 'automation-settings' };
   }
+  if (head === 'automation-scaling') {
+    return { ...DEFAULT_ROUTE, page: 'automation-scaling' };
+  }
   if (head === 'settings') {
+    if (sub === 'scaling' || sub === 'automation-scaling') {
+      return { ...DEFAULT_ROUTE, page: 'automation-scaling' };
+    }
     if (sub === 'automation' || sub === 'automation-settings') {
       return { ...DEFAULT_ROUTE, page: 'automation-settings' };
     }
@@ -240,8 +247,13 @@ export default function App() {
   const [apitestPage, setApitestPage] = useState(initialRoute.apitestPage);
   const [perfPage, setPerfPage] = useState(initialRoute.perfPage);
   const [testgenPage, setTestgenPage] = useState(initialRoute.testgenPage);
-  const [notice, setNoticeState] = useState(null);
-  const notify = (text, tone = 'success') => setNoticeState(text ? { text, tone } : null);
+  const notify = (text, tone = 'success') => {
+    if (!text) return;
+    if (tone === 'error') globalNotify.error(text);
+    else if (tone === 'warning') globalNotify.warning(text);
+    else if (tone === 'info') globalNotify.info(text);
+    else globalNotify.success(text);
+  };
   const [adminNotice, setAdminNotice] = useState('Administration workspace — Super Admin only.');
 
   const [chatMessages, setChatMessages] = useState([
@@ -437,12 +449,6 @@ export default function App() {
       notify(`${title}: ${message}`, 'error');
     });
   }, []);
-
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNoticeState(null), 3500);
-    return () => clearTimeout(timer);
-  }, [notice]);
 
   // The shell is the only scroll container (product iframes auto-size instead of scrolling).
   // Tab switches swap content in place, so the browser never resets scroll on its own.
@@ -690,6 +696,13 @@ export default function App() {
       { label: 'Home', onClick: goDashboard },
       { label: 'Settings' },
       { label: 'Automation Settings' }
+    ];
+  } else if (page === 'automation-scaling') {
+    pageTitle = 'Runner Scaling & Fleet';
+    breadcrumbItems = [
+      { label: 'Home', onClick: goDashboard },
+      { label: 'Settings' },
+      { label: 'Runner Scaling' }
     ];
   } else if (page === 'documentation') {
     pageTitle = 'Documentation';
@@ -1026,7 +1039,8 @@ export default function App() {
               page === 'perf' ? perfPage :
               page === 'testgen' ? testgenPage :
               page === 'workspace-settings' ? 'workspace-settings' :
-              page === 'automation-settings' ? 'automation-settings' : null
+              page === 'automation-settings' ? 'automation-settings' :
+              page === 'automation-scaling' ? 'automation-scaling' : null
             }
             logout={logout}
             project={session?.project}
@@ -1042,6 +1056,10 @@ export default function App() {
                 setPage('automation-settings');
                 window.location.hash = '#/settings/automation-settings';
               }
+              if (key === 'automation-scaling') {
+                setPage('automation-scaling');
+                window.location.hash = '#/settings/automation-scaling';
+              }
               if (key === 'documentation') goDocumentation();
               if (key === 'ai-assistant') goAiAssistant();
               if (key === 'automation') setAutomationPageAndHash(automationPage);
@@ -1051,7 +1069,10 @@ export default function App() {
             }}
             onNavigateChild={(parentKey, childKey) => {
               if (parentKey === 'settings') {
-                if (childKey === 'automation-settings') {
+                if (childKey === 'automation-scaling') {
+                  setPage('automation-scaling');
+                  window.location.hash = '#/settings/automation-scaling';
+                } else if (childKey === 'automation-settings') {
                   setPage('automation-settings');
                   window.location.hash = '#/settings/automation-settings';
                 } else {
@@ -1095,6 +1116,12 @@ export default function App() {
       >
         {superAdmin && page === 'profile' ? (
           <Profile setNotice={notify} onProfileSaved={updateSessionUser} project={session?.project} />
+        ) : superAdmin && page === 'workspace-settings' ? (
+          <WorkspaceSettings setNotice={notify} />
+        ) : superAdmin && page === 'automation-settings' ? (
+          <AutomationWorkspace activePage="settings-engines" />
+        ) : superAdmin && page === 'automation-scaling' ? (
+          <AutomationWorkspace activePage="settings-scaling" />
         ) : superAdmin ? (
           <AdminContent
             activePage={adminPage}
@@ -1117,6 +1144,8 @@ export default function App() {
           <WorkspaceSettings setNotice={notify} />
         ) : page === 'automation-settings' ? (
           <AutomationWorkspace activePage="settings-engines" />
+        ) : page === 'automation-scaling' ? (
+          <AutomationWorkspace activePage="settings-scaling" />
         ) : page === 'documentation' ? (
           <IntegrationGuide project={session?.project} setNotice={notify} />
         ) : page === 'ai-assistant' ? (
@@ -1145,21 +1174,6 @@ export default function App() {
         duration={2000}
         onDone={() => setDestHighlight((d) => ({ ...d, active: false }))}
       />
-
-      {notice && (
-        <div
-          role="status"
-          style={{
-            position: 'fixed', top: '20px', right: '20px', zIndex: 1000,
-            background: notice.tone === 'error' ? '#dc2626' : '#16a34a', color: '#fff', padding: '12px 18px',
-            borderRadius: '10px', fontSize: '13px', fontWeight: 600,
-            boxShadow: '0 10px 30px rgba(0,0,0,0.35)'
-          }}
-        >
-          {notice.text}
-        </div>
-      )}
-
     </>
   );
 }

@@ -201,7 +201,12 @@ public class FrameworkRunnerService {
                 return;
             }
         } else if (jobFrameworkPath != null && !jobFrameworkPath.isBlank()) {
-            resolvedCwd = Paths.get(projectFrameworksRoot, jobFrameworkPath).toString();
+            Path p = Paths.get(jobFrameworkPath.trim());
+            if (p.isAbsolute()) {
+                resolvedCwd = p.toString();
+            } else {
+                resolvedCwd = Paths.get(projectFrameworksRoot, jobFrameworkPath.trim()).toString();
+            }
         } else {
             resolvedCwd = null;
         }

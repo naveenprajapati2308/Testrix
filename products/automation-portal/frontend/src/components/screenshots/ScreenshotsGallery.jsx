@@ -23,6 +23,7 @@ import {
   Layers,
   Download
 } from 'lucide-react';
+import { notify } from '../../../../../../shared/ui/NotificationProvider.jsx';
 import './screenshots.css';
 
 // Deterministic chip color per module code (matches the bright-theme mock)
@@ -66,7 +67,7 @@ export function ScreenshotsGallery({ onSelectExecution }) {
       const list = await api.screenshotsList();
       setScreenshots(list);
     } catch (e) {
-      console.error("Error loading screenshots", e);
+      notify.error("Error loading screenshots: " + (e.message || 'Server error'));
     } finally {
       setLoading(false);
     }
@@ -132,8 +133,9 @@ export function ScreenshotsGallery({ onSelectExecution }) {
       if ((activeImage?.id || activeImage?.testCaseId) === idToDelete) setActiveImage(null);
       if ((activeVideo?.id || activeVideo?.testCaseId) === idToDelete) setActiveVideo(null);
       setConfirmDelete(null);
+      notify.success("Media deleted successfully.");
     } catch (e) {
-      alert("Failed to delete media: " + e.message);
+      notify.error("Failed to delete media: " + (e.message || 'Server error'));
     } finally {
       setDeleting(false);
     }

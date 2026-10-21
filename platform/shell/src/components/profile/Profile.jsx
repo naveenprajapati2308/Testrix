@@ -28,6 +28,7 @@ import { ChangeEmailForm } from './ChangeEmailForm.jsx';
 import { ChangePasswordForm } from './ChangePasswordForm.jsx';
 import './profile.css';
 import { Loader } from '../../../../../shared/ui/Loader.jsx';
+import { notify } from '../../../../../shared/ui/NotificationProvider.jsx';
 
 // ── Time helpers ───────────────────────────────────────────────────────────────
 function formatDateTime(raw) {
@@ -84,7 +85,7 @@ export function Profile({ setNotice, onProfileSaved, project }) {
     setPreviewUrl(profileData.profileImagePath ?? null);
   };
 
-  useEffect(() => { load().catch((err) => setNotice(err.message)); }, []);
+  useEffect(() => { load().catch((err) => notify.error(err.message || 'Failed to load profile.')); }, []);
 
   const updateEditField = (field, value) => {
     setForm((c) => ({ ...c, [field]: value }));
@@ -109,7 +110,7 @@ export function Profile({ setNotice, onProfileSaved, project }) {
     try {
       const updated = await api.updateProfile(form);
       setProfile(updated);
-      setNotice('Profile updated.');
+      notify.success('Profile updated successfully.');
       setEditing(false);
       onProfileSaved?.({
         displayName: updated.displayName,
@@ -117,7 +118,7 @@ export function Profile({ setNotice, onProfileSaved, project }) {
       });
       await load();
     } catch (error) {
-      setNotice(error.message);
+      notify.error(error.message || 'Failed to update profile.');
     }
   };
 
@@ -130,9 +131,9 @@ export function Profile({ setNotice, onProfileSaved, project }) {
       const data = await api.uploadProfileImage(file);
       setForm((f) => ({ ...f, profileImagePath: data.profileImagePath }));
       onProfileSaved?.({ profileImagePath: data.profileImagePath });
-      setNotice('Profile image uploaded.');
+      notify.success('Profile picture updated successfully.');
     } catch (err) {
-      setNotice(err.message);
+      notify.error(err.message || 'Failed to upload photo.');
     } finally {
       setUploading(false);
     }

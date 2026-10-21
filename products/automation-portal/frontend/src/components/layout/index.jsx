@@ -21,13 +21,16 @@ export function Sidebar({
   logout,
   isCollapsed,
   onToggle,
-  isProjectAdmin
+  isProjectAdmin,
+  isSuperAdmin
 }) {
   const [openSubmenus, setOpenSubmenus] = useState({ settings: true });
 
   const toggleSubmenu = (key) => {
     setOpenSubmenus((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const hasAdminAccess = isProjectAdmin || isSuperAdmin || auth.get()?.user?.role === 'SUPER_ADMIN';
 
   return (
     <aside
@@ -59,13 +62,12 @@ export function Sidebar({
         >
           {isCollapsed ? 'NAV' : 'Navigation'}
         </div>
-        {/* Environments holds every environment's raw credentials (baseUrl config,
-            captcha keys) — the backend now enforces SUPER_ADMIN there too, this just
-            keeps a non-admin from landing on a tab that will only 403 on them.
-            Add Framework re-enters the Automation Setup Wizard, which only a Project Admin
-            can actually complete (Module/Environment creation is Project-Admin-gated). */}
-        {USER_NAV.filter((item) => item.key !== 'environments' || auth.get()?.user?.role === 'SUPER_ADMIN')
-          .filter((item) => item.key !== 'automation-setup' || isProjectAdmin)
+        {/* Environments: SUPER_ADMIN only
+            Add Framework (automation-setup): Project Admin or Super Admin
+            Automation Settings (settings): Project Admin or Super Admin */}
+        {USER_NAV.filter((item) => item.key !== 'environments' || hasAdminAccess)
+          .filter((item) => item.key !== 'automation-setup' || hasAdminAccess)
+          .filter((item) => item.key !== 'settings' || hasAdminAccess)
           .map((item) => {
             const Icon = item._icon || Settings2;
             const hasChildren = item.children && item.children.length > 0;

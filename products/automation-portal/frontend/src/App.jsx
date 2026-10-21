@@ -19,7 +19,8 @@ import {
   Wrench,
   Settings2,
   Briefcase,
-  Cpu
+  Cpu,
+  Layers
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { initThemeSync, getStoredThemePref, resolveEffectiveTheme } from '../../../../shared/ui/theme-sync.js';
@@ -37,6 +38,7 @@ import { PortalLayout, Sidebar, Topbar } from './components/layout/index.jsx';
 import { ReportsCenter } from './components/reports/ReportsCenter.jsx';
 import { Placeholder, Modal } from './components/shared/index.jsx';
 import { FullScreenLoader } from '../../../../shared/ui/Loader.jsx';
+import { notify as globalNotify } from '../../../../shared/ui/NotificationProvider.jsx';
 import appLogo from './assets/testrix_logo.png';
 import { LogsViewer } from './components/logs/LogsViewer.jsx';
 import { ScreenshotsGallery } from './components/screenshots/ScreenshotsGallery.jsx';
@@ -47,7 +49,7 @@ import { fallbackSummary, USER_NAV } from './constants.js';
 const ICON_MAP = {
   Gauge, Play, FileText, TerminalSquare, Camera, Globe2,
   LayoutDashboard, KeyRound, GitCompare, Wrench, Settings2,
-  Briefcase, Cpu
+  Briefcase, Cpu, Layers
 };
 USER_NAV.forEach((item) => {
   item._icon = ICON_MAP[item.icon];
@@ -64,7 +66,8 @@ USER_NAV.forEach((item) => {
 const USER_TAB_KEYS = new Set([
   ...USER_NAV.map((item) => item.key),
   'settings-workspace',
-  'settings-engines'
+  'settings-engines',
+  'settings-scaling'
 ]);
 
 const parseHashRoute = () => {
@@ -193,6 +196,11 @@ export function App() {
   // with its own framework path set. Determined in refresh() below, alongside everything else
   // it already loads on boot.
   const [automationSetup, setAutomationSetup] = useState('checking');
+
+  const isSuperAdmin = useMemo(() => {
+    return session?.user?.role === 'SUPER_ADMIN';
+  }, [session?.user?.role]);
+
   const isProjectAdmin = useMemo(() => {
     const role = session?.user?.role;
     if (role === 'SUPER_ADMIN' || role === 'ADMIN' || !role) return true;
@@ -206,8 +214,13 @@ export function App() {
   const [selectedBrowser, setSelectedBrowser] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState('');
   // Toast: { text, tone } — tone is 'success' | 'warning' | 'error'
-  const [notice, setNotice] = useState(null);
-  const notify = (text, tone = 'success') => setNotice(text ? { text, tone } : null);
+  const notify = (text, tone = 'success') => {
+    if (!text) return;
+    if (tone === 'error') globalNotify.error(text);
+    else if (tone === 'warning') globalNotify.warning(text);
+    else if (tone === 'info') globalNotify.info(text);
+    else globalNotify.success(text);
+  };
   const [selectedExecutionId, setSelectedExecutionId] = useState(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
     localStorage.getItem('sidebar-collapsed') === 'true'
@@ -450,16 +463,18 @@ export function App() {
       {active === 'screenshots' && <ScreenshotsGallery onSelectExecution={setSelectedExecutionId} />}
       {active === 'compare' && <ComparePage executions={executions} modules={modules} />}
       {active === 'environments' && <EnvironmentView onRefresh={refresh} />}
-      {(active === 'settings-workspace' || active === 'settings') && (
-        <WorkspaceSettingsView
+      {(active === 'settings' || active.startsWith('settings-')) && (
+        <SettingsView
+          initialTab={
+            active === 'settings-engines'
+              ? 'engines'
+              : active === 'settings-scaling'
+              ? 'scaling'
+              : 'workspace'
+          }
           onNotify={notify}
           isProjectAdmin={isProjectAdmin}
-        />
-      )}
-      {active === 'settings-engines' && (
-        <EngineManagementView
-          onNotify={notify}
-          isProjectAdmin={isProjectAdmin}
+          isSuperAdmin={isSuperAdmin}
           onNavigateToSetup={() => setActive('automation-setup')}
         />
       )}
@@ -476,7 +491,7 @@ export function App() {
   );
 
   const content = isEmbedded ? (
-    <div className="layout-content">{pages}</div>
+    <div className="layout-content page-fade-enter" key={active}>{pages}</div>
   ) : (
     <PortalLayout
       isCollapsed={isSidebarCollapsed}
@@ -488,6 +503,7 @@ export function App() {
           isCollapsed={isSidebarCollapsed}
           onToggle={toggleSidebar}
           isProjectAdmin={isProjectAdmin}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
       topbar={(
@@ -497,7 +513,7 @@ export function App() {
         />
       )}
     >
-      {pages}
+      <div className="page-fade-enter" key={active}>{pages}</div>
     </PortalLayout>
   );
 
@@ -505,65 +521,7 @@ export function App() {
     <>
       {content}
 
-
       {!isEmbedded && bootLoader && <FullScreenLoader exiting={bootLoader === 'exit'} logoSrc={appLogo} />}
-
-      {notice && (() => {
-        const tone = TOAST_TONES[notice.tone] || TOAST_TONES.success;
-        const ToneIcon = tone.icon;
-        return (
-          <div
-            role="status"
-            style={{
-              position: 'fixed',
-              top: '20px',
-              right: '20px',
-              zIndex: 1000,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              background: tone.bg,
-              color: '#ffffff',
-              padding: '12px 16px',
-              borderRadius: '10px',
-              fontSize: '13px',
-              fontWeight: 600,
-              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.35)',
-            }}
-          >
-            <span
-              style={{
-                display: 'grid',
-                placeItems: 'center',
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background: 'rgba(255, 255, 255, 0.25)',
-                color: '#ffffff',
-                flexShrink: 0,
-              }}
-            >
-              <ToneIcon size={12} strokeWidth={3} />
-            </span>
-            {notice.text}
-            <button
-              onClick={() => setNotice(null)}
-              aria-label="Dismiss"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#ffffff',
-                cursor: 'pointer',
-                padding: '2px',
-                marginLeft: '4px',
-                opacity: 0.8,
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        );
-      })()}
 
       {globalError && (
         <Modal

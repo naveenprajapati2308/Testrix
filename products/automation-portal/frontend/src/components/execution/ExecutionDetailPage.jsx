@@ -20,6 +20,7 @@ import {
   ExternalLink,
   ChevronRight
 } from 'lucide-react';
+import { notify, confirmDialog } from '../../../../../../shared/ui/NotificationProvider.jsx';
 
 export function ExecutionDetailPage({ executionId, onClose }) {
   const [activeTab, setActiveTab] = useState('summary');
@@ -100,38 +101,56 @@ export function ExecutionDetailPage({ executionId, onClose }) {
   }, [executionId]);
 
   const handleRerun = async () => {
-    if (confirm("Are you sure you want to rerun this entire execution?")) {
-      try {
-        await api.rerunExecution(executionId);
-        alert("Execution rerun has been queued.");
-        onClose();
-      } catch (e) {
-        alert("Rerun failed: " + e.message);
-      }
+    const ok = await confirmDialog({
+      title: 'Rerun Entire Execution?',
+      message: 'This will queue a complete new run for all test cases in this suite.',
+      confirmText: 'Rerun Execution',
+      cancelText: 'Cancel',
+      danger: false
+    });
+    if (!ok) return;
+    try {
+      await api.rerunExecution(executionId);
+      notify.success("Execution rerun has been queued.");
+      onClose();
+    } catch (e) {
+      notify.error("Rerun failed: " + (e.message || 'Server error'));
     }
   };
 
   const handleRerunFailed = async () => {
-    if (confirm("Are you sure you want to rerun ONLY the failed tests of this execution?")) {
-      try {
-        await api.rerunFailedExecution(executionId);
-        alert("Rerun of failed tests has been queued.");
-        onClose();
-      } catch (e) {
-        alert("Rerun failed: " + e.message);
-      }
+    const ok = await confirmDialog({
+      title: 'Rerun Failed Tests Only?',
+      message: 'This will queue an isolated run containing only tests that previously failed.',
+      confirmText: 'Rerun Failed',
+      cancelText: 'Cancel',
+      danger: false
+    });
+    if (!ok) return;
+    try {
+      await api.rerunFailedExecution(executionId);
+      notify.success("Rerun of failed tests has been queued.");
+      onClose();
+    } catch (e) {
+      notify.error("Rerun failed: " + (e.message || 'Server error'));
     }
   };
 
   const handleCancel = async () => {
-    if (confirm("Are you sure you want to request cancellation for this execution?")) {
-      try {
-        await api.cancelExecution(executionId);
-        alert("Cancellation requested.");
-        fetchDetails();
-      } catch (e) {
-        alert("Cancel request failed: " + e.message);
-      }
+    const ok = await confirmDialog({
+      title: 'Cancel Test Execution?',
+      message: 'Are you sure you want to request cancellation for this in-flight execution?',
+      confirmText: 'Cancel Run',
+      cancelText: 'Keep Running',
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      await api.cancelExecution(executionId);
+      notify.info("Cancellation requested.");
+      fetchDetails();
+    } catch (e) {
+      notify.error("Cancel request failed: " + (e.message || 'Server error'));
     }
   };
 
@@ -141,8 +160,9 @@ export function ExecutionDetailPage({ executionId, onClose }) {
       // Compare this execution (base = compareTargetId, target = executionId)
       const result = await api.compareExecutions(compareTargetId, executionId);
       setComparisonResult(result);
+      notify.success("Historical comparison loaded.");
     } catch (e) {
-      alert("Comparison failed: " + e.message);
+      notify.error("Comparison failed: " + (e.message || 'Server error'));
     }
   };
 
@@ -256,16 +276,16 @@ export function ExecutionDetailPage({ executionId, onClose }) {
                 style={{
                   padding: '14px 4px',
                   border: 0,
-                  borderBottom: isTabActive ? '3px solid #176b87' : '3px solid transparent',
+                  borderBottom: isTabActive ? '3px solid var(--accent, #4f46e5)' : '3px solid transparent',
                   background: 'transparent',
                   fontWeight: isTabActive ? 700 : 500,
-                  color: isTabActive ? 'var(--accent-text)' : 'var(--text-muted)',
+                  color: isTabActive ? 'var(--accent-text, #4f46e5)' : 'var(--text-muted)',
                   cursor: 'pointer',
                   fontSize: '13px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  transition: 'all 0.15s'
+                  transition: 'color 0.18s ease, border-color 0.18s ease'
                 }}
               >
                 {tab.key !== 'testCases' && <Icon size={14} />}
@@ -276,7 +296,7 @@ export function ExecutionDetailPage({ executionId, onClose }) {
         </div>
 
         {/* Tab Content Container */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+        <div key={activeTab} className="tab-fade-enter" style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
 
           {/* Summary Tab */}
           {activeTab === 'summary' && (

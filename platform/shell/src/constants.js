@@ -64,7 +64,9 @@ export const ADMIN_WORKSPACE_NAV = [
     icon: 'Play',
     children: [
       { key: 'module-management', label: 'Module Management', icon: 'Package' },
-      { key: 'portal-config', label: 'System Config', icon: 'Sliders' }
+      { key: 'portal-config', label: 'System Config', icon: 'Sliders' },
+      { key: 'runner-scaling-admin', label: 'Runner Scaling & Fleet', icon: 'Layers' },
+      { key: 'automation-settings-admin', label: 'Automation Settings', icon: 'Cpu' }
     ]
   },
   {
@@ -91,7 +93,8 @@ export const ADMIN_WORKSPACE_NAV = [
     icon: 'Building2',
     children: [
       { key: 'workspace-requests', label: 'Workspace Requests', icon: 'ClipboardList' },
-      { key: 'project-management', label: 'Project Management', icon: 'FolderKanban' }
+      { key: 'project-management', label: 'Project Management', icon: 'FolderKanban' },
+      { key: 'workspace-settings-admin', label: 'Workspace Settings', icon: 'Briefcase' }
     ]
   },
   {

@@ -1,57 +1,75 @@
 import { FolderKanban, PauseCircle, PlayCircle, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api.js';
-import { Panel, DataTable, ConfirmDialog } from '../shared/index.jsx';
+import { Panel, DataTable } from '../shared/index.jsx';
+import { notify, confirmDialog } from '../../../../../shared/ui/NotificationProvider.jsx';
 
 const MODULE_LABELS = {
   AUTOMATION_SELENIUM: 'Automation (Selenium)',
   AUTOMATION_PLAYWRIGHT: 'Automation (Playwright)',
   API_TESTING: 'API Testing',
-  PERFORMANCE_TESTING: 'Performance Testing'
+  PERFORMANCE_TESTING: 'Performance Testing',
+  TESTCASE_GENERATOR: 'Test Case Generation',
+  GENAI: 'GenAI Engine'
 };
 
 // ── Super Admin: platform-wide view of every provisioned Project (= Workspace). ────────────────
 export function ProjectManagement({ setNotice }) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const load = () => {
     setLoading(true);
-    return api.adminListProjects().then(setProjects).catch((e) => setNotice(e.message)).finally(() => setLoading(false));
+    return api.adminListProjects()
+      .then(setProjects)
+      .catch((e) => notify.error(e.message || 'Failed to load projects.'))
+      .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      const result = await api.adminDeleteProject(deleteTarget.id);
-      setNotice(result.message || `Workspace "${deleteTarget.name}" deleted.`);
-      setDeleteTarget(null);
-      load();
-    } catch (e) {
-      setNotice(e.message);
-      setDeleteTarget(null);
-    }
+  const handleDelete = (p) => {
+    confirmDialog({
+      title: 'Delete Workspace?',
+      message: `Permanently delete "${p.name}" (${p.projectCode})? Workspace can only be deleted if it has no active modules or data.`,
+      confirmText: 'Delete Workspace',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          const result = await api.adminDeleteProject(p.id);
+          notify.success(result.message || `Workspace "${p.name}" deleted.`);
+          load();
+        } catch (e) {
+          notify.error(e.message || 'Failed to delete workspace.');
+        }
+      }
+    });
   };
 
-  const suspend = async (p) => {
-    try {
-      await api.adminSuspendProject(p.id);
-      setNotice(`Workspace "${p.name}" suspended — its users can no longer log in.`);
-      load();
-    } catch (e) {
-      setNotice(e.message);
-    }
+  const suspend = (p) => {
+    confirmDialog({
+      title: 'Suspend Workspace?',
+      message: `Suspend workspace "${p.name}"? Users of this workspace will not be able to log in until activated.`,
+      confirmText: 'Suspend Workspace',
+      confirmVariant: 'warning',
+      onConfirm: async () => {
+        try {
+          await api.adminSuspendProject(p.id);
+          notify.success(`Workspace "${p.name}" suspended.`);
+          load();
+        } catch (e) {
+          notify.error(e.message || 'Failed to suspend workspace.');
+        }
+      }
+    });
   };
 
   const activate = async (p) => {
     try {
       await api.adminActivateProject(p.id);
-      setNotice(`Workspace "${p.name}" activated.`);
+      notify.success(`Workspace "${p.name}" activated.`);
       load();
     } catch (e) {
-      setNotice(e.message);
+      notify.error(e.message || 'Failed to activate workspace.');
     }
   };
 
@@ -76,7 +94,7 @@ export function ProjectManagement({ setNotice }) {
               <PauseCircle size={12} /> Suspend
             </button>
           )}
-          <button className="action-btn delete-btn" onClick={() => setDeleteTarget(p)} title="Delete workspace" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          <button className="action-btn delete-btn" onClick={() => handleDelete(p)} title="Delete workspace" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
             <Trash2 size={12} /> Delete
           </button>
         </div>
@@ -92,19 +110,6 @@ export function ProjectManagement({ setNotice }) {
         </div>
         <DataTable columns={columns} data={projects} loading={loading} searchPlaceholder="Filter projects..." exportFilename="projects_list.csv" />
       </Panel>
-
-      {deleteTarget && (
-        <ConfirmDialog onClose={() => setDeleteTarget(null)}>
-          <div className="confirm-icon" style={{ color: '#dc2626' }}><Trash2 size={30} /></div>
-          <h3>Delete Workspace?</h3>
-          <p>Permanently delete <strong>{deleteTarget.name}</strong> ({deleteTarget.projectCode})?</p>
-          <p className="confirm-warning">Only succeeds if the workspace has no modules, environments, executions, collections, or performance data — otherwise it's rejected so real data is never silently lost.</p>
-          <div className="confirm-actions">
-            <button className="secondary-action" onClick={() => setDeleteTarget(null)}>Cancel</button>
-            <button className="danger-action" onClick={handleDelete}>Delete</button>
-          </div>
-        </ConfirmDialog>
-      )}
     </section>
   );
 }

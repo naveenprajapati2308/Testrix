@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { api, auth, API_BASE } from '../../api.js';
 import { DataTable, Modal } from '../shared/index.jsx';
+import { notify, confirmDialog } from '../../../../../../shared/ui/NotificationProvider.jsx';
 import './execution.css';
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
@@ -437,13 +438,20 @@ export function ExecutionCenter({
 
   const handleCancelRun = async () => {
     if (!activeExec) return;
-    if (confirm("Are you sure you want to cancel this execution?")) {
-      try {
-        await api.cancelExecution(activeExec.id);
-        appendLog('SYSTEM', 'Cancellation request submitted');
-      } catch (e) {
-        alert("Failed to cancel: " + e.message);
-      }
+    const ok = await confirmDialog({
+      title: 'Cancel Active Execution?',
+      message: `Are you sure you want to cancel execution ${activeExec.executionCode || ''}? Tests currently running will be halted.`,
+      confirmText: 'Cancel Run',
+      cancelText: 'Keep Running',
+      danger: true
+    });
+    if (!ok) return;
+    try {
+      await api.cancelExecution(activeExec.id);
+      appendLog('SYSTEM', 'Cancellation request submitted');
+      notify.info('Cancellation request submitted.');
+    } catch (e) {
+      notify.error('Failed to cancel: ' + (e.message || 'Server error'));
     }
   };
 
@@ -457,9 +465,10 @@ export function ExecutionCenter({
     try {
       await api.deleteExecution(confirmDelete.id);
       setConfirmDelete(null);
+      notify.success('Execution deleted successfully.');
       if (onRefresh) await onRefresh();
     } catch (e) {
-      alert('Failed to delete execution: ' + e.message);
+      notify.error('Failed to delete execution: ' + (e.message || 'Server error'));
     } finally {
       setDeleting(false);
     }

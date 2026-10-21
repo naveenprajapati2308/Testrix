@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, auth } from '../../api.js';
 import { Field } from '../shared/Field.jsx';
 import { Panel, DataTable, Modal, ConfirmDialog } from '../shared/index.jsx';
+import { notify } from '../../../../../shared/ui/NotificationProvider.jsx';
 
 // ── Project Admin's own Team Management page — create/onboard, edit, activate/deactivate,
 // assign roles, remove users within their current project. Never touches the platform Role
@@ -32,7 +33,10 @@ export function ProjectUserManagement({ setNotice }) {
 
   const load = () => {
     setLoading(true);
-    return api.listProjectUsers(project.id).then(setMembers).catch((e) => setNotice(e.message)).finally(() => setLoading(false));
+    return api.listProjectUsers(project.id)
+      .then(setMembers)
+      .catch((e) => notify.error(e.message || 'Failed to load team members.'))
+      .finally(() => setLoading(false));
   };
   useEffect(() => {
     load();
@@ -43,11 +47,11 @@ export function ProjectUserManagement({ setNotice }) {
     if (!removeTarget) return;
     try {
       await api.removeProjectUser(removeTarget.projectId, removeTarget.member.userId);
-      setNotice(`${removeTarget.member.username} removed from ${removeTarget.projectName}.`);
+      notify.success(`${removeTarget.member.username} removed from ${removeTarget.projectName}.`);
       setRemoveTarget(null);
       await load();
     } catch (e) {
-      setNotice(e.message);
+      notify.error(e.message || 'Failed to remove user.');
       setRemoveTarget(null);
     }
   };
@@ -56,11 +60,11 @@ export function ProjectUserManagement({ setNotice }) {
     if (!transferTarget) return;
     try {
       await api.transferProjectOwnership(project.id, transferTarget.userId);
-      setNotice(`${transferTarget.username} is now the Project Admin.`);
+      notify.success(`${transferTarget.username} is now the Project Admin.`);
       setTransferTarget(null);
       await load();
     } catch (e) {
-      setNotice(e.message);
+      notify.error(e.message || 'Failed to transfer ownership.');
       setTransferTarget(null);
     }
   };
@@ -69,12 +73,12 @@ export function ProjectUserManagement({ setNotice }) {
     if (!selfTransferPick) return;
     try {
       await api.transferProjectOwnership(project.id, Number(selfTransferPick));
-      setNotice('Ownership transferred. You can remove yourself now if you still want to leave.');
+      notify.success('Ownership transferred successfully.');
       setSelfRemoveBlock(null);
       setSelfTransferPick('');
       await load();
     } catch (e) {
-      setNotice(e.message);
+      notify.error(e.message || 'Failed to transfer ownership.');
     }
   };
 

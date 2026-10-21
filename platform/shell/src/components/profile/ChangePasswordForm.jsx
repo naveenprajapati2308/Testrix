@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../../api.js';
 import { Field } from '../shared/Field.jsx';
+import { notify } from '../../../../../shared/ui/NotificationProvider.jsx';
 
 // ── Change Password Form ───────────────────────────────────────────────────────
 export function ChangePasswordForm({ setNotice, onClose }) {
@@ -17,16 +18,16 @@ export function ChangePasswordForm({ setNotice, onClose }) {
     if (form.newPassword !== form.confirmPassword) {
       const message = 'New passwords do not match.';
       setFormError(message);
-      setNotice(message);
+      notify.error(message);
       return;
     }
     try {
       await api.changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
-      setNotice('Password changed successfully.');
+      notify.success('Password changed successfully.');
       onClose();
     } catch (err) {
       setFormError(err.message);
-      setNotice(err.message);
+      notify.error(err.message || 'Failed to change password.');
     }
   };
 

@@ -4,6 +4,7 @@ import { api } from '../../api.js';
 import { ROLES } from '../../constants.js';
 import { Field } from '../shared/Field.jsx';
 import { Panel, DataTable, Modal, ConfirmDialog } from '../shared/index.jsx';
+import { notify } from '../../../../../shared/ui/NotificationProvider.jsx';
 
 // ── Validation helpers ────────────────────────────────────────────────────────
 const MOBILE_REGEX = /^[0-9]{10}$/;
@@ -60,24 +61,32 @@ export function UserManagement({ setNotice }) {
 
   const loadUsers = () => {
     setLoading(true);
-    return api.adminListUsers().then(setUsers).catch((e) => setNotice(e.message)).finally(() => setLoading(false));
+    return api.adminListUsers()
+      .then(setUsers)
+      .catch((e) => notify.error(e.message || 'Failed to load users.'))
+      .finally(() => setLoading(false));
   };
   useEffect(() => { loadUsers(); }, []);
 
   const changeRole = async (id, role) => {
-    try { await api.adminAssignRole(id, role); setNotice('Role updated successfully.'); await loadUsers(); }
-    catch (e) { setNotice(e.message); }
+    try {
+      await api.adminAssignRole(id, role);
+      notify.success('Platform role updated successfully.');
+      await loadUsers();
+    } catch (e) {
+      notify.error(e.message || 'Failed to update platform role.');
+    }
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
       await api.adminDeleteUser(deleteTarget.id);
-      setNotice(`User "${deleteTarget.username}" deleted successfully.`);
+      notify.success(`User "${deleteTarget.username}" deleted successfully.`);
       setDeleteTarget(null);
       await loadUsers();
     } catch (e) {
-      setNotice(e.message);
+      notify.error(e.message || 'Failed to delete user.');
       setDeleteTarget(null);
     }
   };

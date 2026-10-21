@@ -22,6 +22,7 @@ import {
   ChevronRight,
   ChevronDown
 } from 'lucide-react';
+import { notify, confirmDialog } from '../../../../../../shared/ui/NotificationProvider.jsx';
 import './environments.css';
 
 const parseConfig = (json) => {
@@ -138,9 +139,10 @@ function EnvCard({ env, onSaved, onDeleted }) {
       });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
+      notify.success(`Configuration saved for ${env.name}.`);
       onSaved();
     } catch (e) {
-      alert('Failed to save: ' + e.message);
+      notify.error('Failed to save: ' + (e.message || 'Server error'));
     } finally {
       setSaving(false);
     }
@@ -152,22 +154,31 @@ function EnvCard({ env, onSaved, onDeleted }) {
     setSaving(true);
     try {
       await api.updateEnvironment(env.id, { active: !env.active });
+      notify.success(`Environment "${env.name}" ${!env.active ? 'activated' : 'deactivated'}.`);
       onSaved();
     } catch (e) {
-      alert('Failed to update: ' + e.message);
+      notify.error('Failed to update environment: ' + (e.message || 'Server error'));
     } finally {
       setSaving(false);
     }
   };
 
   const remove = async () => {
-    if (!window.confirm(`Delete environment "${env.name}"? Past execution logs referring to it are kept, but you won't be able to run new sessions against it.`)) return;
+    const ok = await confirmDialog({
+      title: `Delete "${env.name}" Environment?`,
+      message: `Past execution logs referring to it are kept, but you will not be able to run new sessions against "${env.name}".`,
+      confirmText: 'Delete Environment',
+      cancelText: 'Keep Environment',
+      danger: true
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await api.deleteEnvironment(env.id);
+      notify.success(`Environment "${env.name}" deleted.`);
       onDeleted();
     } catch (e) {
-      alert('Failed to delete: ' + e.message);
+      notify.error('Failed to delete environment: ' + (e.message || 'Server error'));
       setDeleting(false);
     }
   };
@@ -354,9 +365,11 @@ export function EnvironmentView({ onRefresh }) {
       await api.createEnvironment({ code, name, baseUrl: addForm.baseUrl.trim() || null, active: true });
       setShowAdd(false);
       setAddForm({ code: '', name: '', baseUrl: '' });
+      notify.success(`Environment "${name}" created successfully.`);
       await reloadEverywhere();
     } catch (e) {
       setAddError(e.message);
+      notify.error('Failed to create environment: ' + (e.message || 'Validation error'));
     } finally {
       setCreating(false);
     }

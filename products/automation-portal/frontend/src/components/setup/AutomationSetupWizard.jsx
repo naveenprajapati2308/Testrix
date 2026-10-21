@@ -8,6 +8,7 @@ import {
   Globe2,
   CheckCircle2,
   ArrowRight,
+  ArrowLeft,
   GitBranch,
   Laptop,
   Copy,
@@ -17,6 +18,12 @@ import {
   AlertTriangle,
   Activity,
   X,
+  Sparkles,
+  Cpu,
+  Layers,
+  Terminal,
+  HelpCircle,
+  ExternalLink,
 } from 'lucide-react';
 
 const FRAMEWORK_OPTIONS = [
@@ -30,12 +37,78 @@ const STEP_LABELS = ['Framework & Code', 'Connect Repository', 'First Module', '
 // configured yet. Supports Git Remote (Cloud / CI/CD), Local Agent, and Local Dev Folder.
 export function AutomationSetupWizard({ onFinish }) {
   const [step, setStep] = useState(1);
+  const [maxVisitedStep, setMaxVisitedStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null); // { message, tone: 'success' | 'error' | 'warning' }
 
   const showToast = (message, tone = 'success') => {
     setToast({ message, tone });
+  };
+
+  const goToStep = (newStep) => {
+    if (newStep > maxVisitedStep) {
+      setMaxVisitedStep(newStep);
+    }
+    setStep(newStep);
+  };
+
+  // Validates whether the user can jump/switch directly to a given step
+  const canAccessStep = (targetStep) => {
+    if (targetStep === step) return { allowed: true };
+    // Backward navigation to any previous step or any step already reached is always allowed
+    if (targetStep <= maxVisitedStep || targetStep < step) {
+      return { allowed: true };
+    }
+    // Forward validation checks
+    if (targetStep >= 2 && !engine) {
+      return {
+        allowed: false,
+        reason: 'Please complete Step 1 (Register Test Engine) before moving forward.',
+      };
+    }
+    if (targetStep >= 3) {
+      const isConnected =
+        engine &&
+        ((engine.sourceType === 'GIT_REMOTE' && (engine.gitRepoUrl || gitRepoUrl.trim())) ||
+          (engine.sourceType === 'LOCAL_AGENT' && (engine.localAgentId || localAgentId.trim())) ||
+          (engine.sourceType === 'LOCAL_DEV' && (engine.frameworkPath || subfolder.trim())) ||
+          subfolder.trim() ||
+          gitRepoUrl.trim() ||
+          localAgentId.trim());
+
+      if (!isConnected) {
+        return {
+          allowed: false,
+          reason: 'Please configure and connect your test repository in Step 2 first.',
+        };
+      }
+    }
+    if (targetStep >= 4 && !createdModuleId) {
+      return {
+        allowed: false,
+        reason: 'Please create your first Module in Step 3 before adding an Environment.',
+      };
+    }
+    if (targetStep >= 5) {
+      return {
+        allowed: false,
+        reason: 'Please complete Environment creation in Step 4 first.',
+      };
+    }
+    return { allowed: true };
+  };
+
+  const handleStepClick = (targetStep) => {
+    if (targetStep === step) return;
+    const check = canAccessStep(targetStep);
+    if (!check.allowed) {
+      setError(check.reason);
+      showToast(check.reason, 'warning');
+      return;
+    }
+    setError('');
+    goToStep(targetStep);
   };
 
   useEffect(() => {
@@ -58,6 +131,8 @@ export function AutomationSetupWizard({ onFinish }) {
   const [gitToken, setGitToken] = useState('');
   const [localAgentId, setLocalAgentId] = useState('');
   const [copiedGit, setCopiedGit] = useState(false);
+  const [gitSnippetMode, setGitSnippetMode] = useState('STARTER_KIT'); // 'STARTER_KIT' | 'EXISTING'
+  const [copiedCmdIndex, setCopiedCmdIndex] = useState(null);
 
   // Connection & Folder Verification States
   const [testingGit, setTestingGit] = useState(false);
@@ -98,7 +173,7 @@ export function AutomationSetupWizard({ onFinish }) {
       } else {
         showToast('Engine registered successfully! Connect your repository.', 'success');
       }
-      setStep(2);
+      goToStep(2);
     } catch (e) {
       setError(e.message);
       showToast(e.message || 'Failed to register test engine.', 'error');
@@ -129,6 +204,13 @@ export function AutomationSetupWizard({ onFinish }) {
     setCopiedGit(true);
     showToast('Git commands copied to clipboard!', 'success');
     setTimeout(() => setCopiedGit(false), 2500);
+  };
+
+  const copyStepCommand = (cmdText, index) => {
+    navigator.clipboard.writeText(cmdText);
+    setCopiedCmdIndex(index);
+    showToast(`Copied: ${cmdText}`, 'success');
+    setTimeout(() => setCopiedCmdIndex(null), 2500);
   };
 
   const handleTestGitConnection = async () => {
@@ -185,6 +267,13 @@ export function AutomationSetupWizard({ onFinish }) {
 
   const handleSavePath = async () => {
     setError('');
+    if (sourceType === 'INBUILT_STUDIO' || sourceType === 'GRID_CLUSTER') {
+      const modeName = sourceType === 'INBUILT_STUDIO' ? 'In-App Playwright Studio' : 'Distributed Grid / Worker Pool';
+      const msg = `${modeName} will be introduced soon! Please select Git Remote, Local Agent, or Developer Mode for current execution.`;
+      setError(msg);
+      showToast(msg, 'warning');
+      return;
+    }
     const payload = { sourceType };
 
     if (sourceType === 'GIT_REMOTE') {
@@ -222,7 +311,7 @@ export function AutomationSetupWizard({ onFinish }) {
     } else {
       const folder = subfolder.trim();
       if (!folder) {
-        const msg = 'Enter the folder name you extracted the framework into.';
+        const msg = 'Enter your framework directory path (e.g. D:\\playwright-js or folder name).';
         setError(msg);
         showToast(msg, 'warning');
         return;
@@ -236,7 +325,7 @@ export function AutomationSetupWizard({ onFinish }) {
       setEngine(updated);
       const modeLabel = sourceType === 'GIT_REMOTE' ? 'Git repository' : sourceType === 'LOCAL_AGENT' ? 'Local Agent' : 'Local folder';
       showToast(`${modeLabel} connected successfully!`, 'success');
-      setStep(3);
+      goToStep(3);
     } catch (e) {
       setError(e.message);
       showToast(e.message || 'Failed to update framework configuration.', 'error');
@@ -268,7 +357,7 @@ export function AutomationSetupWizard({ onFinish }) {
       });
       setCreatedModuleId(created.id);
       showToast(`Module ${code} created successfully!`, 'success');
-      setStep(4);
+      goToStep(4);
     } catch (e) {
       setError(e.message);
       showToast(e.message || 'Failed to create module.', 'error');
@@ -296,7 +385,7 @@ export function AutomationSetupWizard({ onFinish }) {
         await api.enableModuleForEnvironment(createdModuleId, created.id);
       }
       showToast(`Environment ${code} created and linked successfully!`, 'success');
-      setStep(5);
+      goToStep(5);
     } catch (e) {
       setError(e.message);
       showToast(e.message || 'Failed to create environment.', 'error');
@@ -319,12 +408,29 @@ export function AutomationSetupWizard({ onFinish }) {
       </header>
 
       <ol className="su-steps">
-        {STEP_LABELS.map((label, i) => (
-          <li key={label} className={i + 1 === step ? 'su-step-active' : i + 1 < step ? 'su-step-done' : ''}>
-            <span className="su-step-num">{i + 1 < step ? <CheckCircle2 size={14} /> : i + 1}</span>
-            {label}
-          </li>
-        ))}
+        {STEP_LABELS.map((label, i) => {
+          const stepNum = i + 1;
+          const isActive = stepNum === step;
+          const isDone = stepNum < step;
+          const access = canAccessStep(stepNum);
+
+          return (
+            <li
+              key={label}
+              className={`su-step-item ${isActive ? 'su-step-active' : ''} ${isDone ? 'su-step-done' : ''} ${access.allowed ? 'su-step-clickable' : 'su-step-disabled'}`}
+              onClick={() => handleStepClick(stepNum)}
+              role="button"
+              tabIndex={0}
+              title={access.allowed ? `Click to jump to Step ${stepNum}: ${label}` : access.reason}
+            >
+              <span className="su-step-num">
+                {isDone ? <CheckCircle2 size={14} /> : stepNum}
+              </span>
+              <span>{label}</span>
+              {!access.allowed && <Lock size={11} style={{ opacity: 0.6, marginLeft: 2 }} />}
+            </li>
+          );
+        })}
       </ol>
 
       {toast && (
@@ -371,6 +477,16 @@ export function AutomationSetupWizard({ onFinish }) {
               />
             </label>
             <div className="su-actions">
+              {engine && (
+                <button
+                  type="button"
+                  className="su-secondary-btn"
+                  onClick={() => goToStep(2)}
+                  style={{ marginRight: 'auto' }}
+                >
+                  Return to Step 2 <ArrowRight size={14} />
+                </button>
+              )}
               <button className="su-secondary-btn" onClick={() => handleGetCode(true)} disabled={busy}>
                 I already have existing framework / code (Skip download)
               </button>
@@ -383,250 +499,443 @@ export function AutomationSetupWizard({ onFinish }) {
 
         {step === 2 && (
           <>
-            <h3><GitBranch size={16} /> Step 2 — Connect your test framework</h3>
-            <p className="su-hint">
-              Choose how Testrix reaches your tests. Select the mode that matches where your framework files are located:
-            </p>
-
-            <div className="su-mode-tabs">
+            <div className="su-step-header-row">
+              <div>
+                <h3 style={{ margin: 0 }}><GitBranch size={16} /> Step 2 — Connect your test framework</h3>
+                <p className="su-hint" style={{ margin: '4px 0 0 0' }}>
+                  Choose how Testrix reaches and executes your automation code:
+                </p>
+              </div>
               <button
                 type="button"
-                className={`su-mode-tab ${sourceType === 'GIT_REMOTE' ? 'su-mode-tab-active' : ''}`}
-                onClick={() => setSourceType('GIT_REMOTE')}
+                className={`su-dev-mode-btn ${sourceType === 'LOCAL_DEV' ? 'su-dev-mode-btn-active' : ''}`}
+                onClick={() => setSourceType(sourceType === 'LOCAL_DEV' ? 'GIT_REMOTE' : 'LOCAL_DEV')}
+                title="Toggle Developer Mode for local-to-local execution on your PC"
               >
-                <div className="su-mode-tab-title">
-                  <GitBranch size={14} color="#3b82f6" /> Git Remote
-                  <span className="su-badge-rec">Recommended</span>
-                </div>
-                <div className="su-mode-tab-desc">Auto-clone from GitHub, GitLab, or Bitbucket per execution.</div>
-              </button>
-
-              <button
-                type="button"
-                className={`su-mode-tab ${sourceType === 'LOCAL_AGENT' ? 'su-mode-tab-active' : ''}`}
-                onClick={() => setSourceType('LOCAL_AGENT')}
-              >
-                <div className="su-mode-tab-title">
-                  <Laptop size={14} color="#10b981" /> Local Agent
-                </div>
-                <div className="su-mode-tab-desc">Directly runs from ANY drive/folder on your PC (F:\, C:\, Desktop).</div>
-              </button>
-
-              <button
-                type="button"
-                className={`su-mode-tab ${sourceType === 'LOCAL_DEV' ? 'su-mode-tab-active' : ''}`}
-                onClick={() => setSourceType('LOCAL_DEV')}
-              >
-                <div className="su-mode-tab-title">
-                  <FolderTree size={14} color="#f59e0b" /> Local Dev Folder
-                </div>
-                <div className="su-mode-tab-desc">Shared mount folder directly on the Testrix Docker host server.</div>
+                <FolderTree size={13} />
+                <span>Developer Mode (Local)</span>
+                {sourceType === 'LOCAL_DEV' && <span className="su-dev-mode-dot" />}
               </button>
             </div>
 
+            {/* ── Main Production / Cloud Modes (when not in Developer Mode) ──── */}
+            {sourceType !== 'LOCAL_DEV' && (
+              <div className="su-mode-tabs" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                <button
+                  type="button"
+                  className={`su-mode-tab ${sourceType === 'GIT_REMOTE' ? 'su-mode-tab-active' : ''}`}
+                  onClick={() => setSourceType('GIT_REMOTE')}
+                >
+                  <div className="su-mode-tab-title">
+                    <GitBranch size={14} color="#3b82f6" /> Git Remote
+                    <span className="su-badge-rec">Live</span>
+                  </div>
+                  <div className="su-mode-tab-desc">Auto-clone from GitHub/GitLab per run.</div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`su-mode-tab ${sourceType === 'LOCAL_AGENT' ? 'su-mode-tab-active' : ''}`}
+                  onClick={() => setSourceType('LOCAL_AGENT')}
+                >
+                  <div className="su-mode-tab-title">
+                    <Laptop size={14} color="#10b981" /> Local Agent
+                    <span className="su-badge-rec" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>VPN/Private</span>
+                  </div>
+                  <div className="su-mode-tab-desc">Runs inside private network/firewall.</div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`su-mode-tab ${sourceType === 'INBUILT_STUDIO' ? 'su-mode-tab-active' : ''}`}
+                  onClick={() => setSourceType('INBUILT_STUDIO')}
+                >
+                  <div className="su-mode-tab-title">
+                    <Sparkles size={14} color="#a855f7" /> In-App Studio
+                    <span className="su-badge-soon">Soon</span>
+                  </div>
+                  <div className="su-mode-tab-desc">Browser Playwright test recorder.</div>
+                </button>
+
+                <button
+                  type="button"
+                  className={`su-mode-tab ${sourceType === 'GRID_CLUSTER' ? 'su-mode-tab-active' : ''}`}
+                  onClick={() => setSourceType('GRID_CLUSTER')}
+                >
+                  <div className="su-mode-tab-title">
+                    <Cpu size={14} color="#ec4899" /> Grid Cluster
+                    <span className="su-badge-soon">Soon</span>
+                  </div>
+                  <div className="su-mode-tab-desc">Multi-browser worker pool execution.</div>
+                </button>
+              </div>
+            )}
+
+            {/* ── MODE 1: GIT REMOTE ────────────────────────────────────────── */}
             {sourceType === 'GIT_REMOTE' && (
-              <div className="su-mode-summary-card">
-                <div className="su-mode-summary-title">
-                  <GitBranch size={14} color="#3b82f6" />
-                  <span>How Git Remote Works:</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
+                <div className="su-mode-summary-card">
+                  <div className="su-mode-summary-title">
+                    <GitBranch size={14} color="#3b82f6" />
+                    <span>When to use Git Remote:</span>
+                  </div>
+                  <p>
+                    <strong>Designed for Cloud/Live Testrix:</strong> When Testrix is deployed live on a cloud server (AWS, GCP, etc.), it clones your repository into an isolated ephemeral container on every run.
+                    <br />
+                    <em>(Note: While running Testrix locally on your PC, Git Remote still works normally using your machine's internet connection).</em>
+                  </p>
                 </div>
-                <p>
-                  No local files or folder paths needed! On every execution run, Testrix clones an isolated, clean copy of your repository and executes tests inside Docker.
-                </p>
-              </div>
-            )}
 
-            {sourceType === 'LOCAL_AGENT' && (
-              <div className="su-agent-guide-card">
-                <h4><Laptop size={15} color="#10b981" /> How Local Agent Works (Any Folder / Drive):</h4>
-                <ol className="su-agent-steps">
-                  <li><strong>Your files stay where they are:</strong> Keep your framework on any drive or folder (e.g. <code>F:\my-automation-tests</code>, <code>C:\projects</code>, Desktop).</li>
-                  <li><strong>No Docker copying:</strong> You do NOT need to copy or move files to Docker directories.</li>
-                  <li><strong>Run the CLI Agent:</strong> Open a terminal inside your framework folder (e.g. <code>cd F:\my-automation-tests</code>) and run the command shown below.</li>
-                  <li><strong>Automatic execution:</strong> Whenever you click Run in Testrix, the agent picks up the job, executes it on your machine, and streams reports back to the UI!</li>
-                </ol>
-              </div>
-            )}
-
-            {sourceType === 'LOCAL_DEV' && (
-              <div className="su-tip-box">
-                <FolderTree size={14} color="#f59e0b" />
-                <span>
-                  <strong>Server Shared Directory Mount:</strong> This mode runs tests from the server's shared mount directory. If your framework is already in another drive (e.g. <code>F:\</code>, <code>C:\</code>, Desktop) and you don't want to move files, select <strong>Local Agent</strong> above!
-                </span>
-              </div>
-            )}
-
-            {sourceType === 'GIT_REMOTE' && (
-              <div className="su-form-grid">
-                <label className="su-field su-field-wide">
-                  <span>Git Repository URL</span>
-                  <input
-                    placeholder="https://github.com/organization/my-test-suite.git"
-                    value={gitRepoUrl}
-                    onChange={(e) => setGitRepoUrl(e.target.value)}
-                  />
-                </label>
-                <label className="su-field">
-                  <span>Branch</span>
-                  <input
-                    placeholder="main"
-                    value={gitBranch}
-                    onChange={(e) => setGitBranch(e.target.value)}
-                  />
-                </label>
-                <label className="su-field">
-                  <span>Authentication</span>
-                  <select
-                    className="su-field input"
-                    value={gitAuthType}
-                    onChange={(e) => setGitAuthType(e.target.value)}
-                    style={{ height: 38, borderRadius: 9, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', padding: '0 12px' }}
+                {/* Sub-tabs for Existing Repository vs Starter Kit */}
+                <div className="su-subtab-bar">
+                  <button
+                    type="button"
+                    className={`su-subtab-btn ${gitSnippetMode === 'STARTER_KIT' ? 'su-subtab-btn-active' : ''}`}
+                    onClick={() => setGitSnippetMode('STARTER_KIT')}
                   >
-                    <option value="NONE">Public Repository (No Auth Required)</option>
-                    <option value="TOKEN">Token / Private Authentication</option>
-                  </select>
-                </label>
-                {gitAuthType === 'TOKEN' && (
-                  <>
-                    <label className="su-field">
-                      <span>Username / Account (optional)</span>
-                      <input
-                        placeholder="e.g. github-username"
-                        value={gitUsername}
-                        onChange={(e) => setGitUsername(e.target.value)}
-                      />
-                    </label>
-                    <label className="su-field">
-                      <span><Lock size={12} style={{ display: 'inline', marginRight: 4 }} /> Access Token / Password</span>
-                      <input
-                        type="password"
-                        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                        value={gitToken}
-                        onChange={(e) => setGitToken(e.target.value)}
-                      />
-                    </label>
-                    <div className="su-field-wide" style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      <strong style={{ color: 'var(--text-primary)' }}>Why a Token instead of regular password?</strong>
-                      <p style={{ margin: '4px 0 0 0' }}>
-                        GitHub discontinued regular account passwords for Git operations in August 2021. For private repos, generate a <strong>Personal Access Token (classic)</strong> with <code>repo</code> scope:
-                      </p>
-                      <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 11, color: '#38bdf8' }}>
-                        GitHub Profile → Settings → Developer Settings → Personal Access Tokens → Tokens (classic) → Generate token (scope: repo)
-                      </div>
-                    </div>
-                  </>
+                    🚀 I'm using Testrix Starter Kit (New Framework)
+                  </button>
+                  <button
+                    type="button"
+                    className={`su-subtab-btn ${gitSnippetMode === 'EXISTING' ? 'su-subtab-btn-active' : ''}`}
+                    onClick={() => setGitSnippetMode('EXISTING')}
+                  >
+                    📂 I have an Existing Git Repository (Migrated Framework)
+                  </button>
+                </div>
+
+                {/* Tab A: Existing Repository instructions */}
+                {gitSnippetMode === 'EXISTING' && (
+                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 9, padding: '12px 14px', fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                    <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
+                      Steps to Connect Your Existing Framework:
+                    </strong>
+                    <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <li>Ensure your repository contains your test suites (e.g. TestNG XML files or Playwright specs).</li>
+                      <li>Include the Testrix event listener/reporter (copy <code>testrix-reporter.ts</code> for Playwright or <code>PortalApiClient.java</code> for Selenium).</li>
+                      <li>Enter your repository URL and branch below.</li>
+                      <li>For private repositories, provide a Personal Access Token (PAT) with <code>repo:read</code> access.</li>
+                      <li>Click <strong>Test Git Connection</strong> to verify immediate connectivity.</li>
+                    </ol>
+                  </div>
                 )}
 
-                <div className="su-field-wide su-test-bar">
-                  <button
-                    type="button"
-                    className="su-test-btn"
-                    onClick={handleTestGitConnection}
-                    disabled={testingGit || !gitRepoUrl.trim()}
-                  >
-                    <Activity size={13} color="#38bdf8" />
-                    {testingGit ? 'Testing Connection...' : 'Test Git Connection'}
-                  </button>
-                  {gitTestResult && (
-                    <div className={`su-test-status ${gitTestResult.success ? 'su-test-status-success' : 'su-test-status-error'}`}>
-                      {gitTestResult.success ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
-                      {gitTestResult.message}
+                {/* Tab B: Starter Kit Step-by-Step Instructions */}
+                {gitSnippetMode === 'STARTER_KIT' && (
+                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 9, padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        Step-by-Step: Push Downloaded Starter Kit to Your Git Repo:
+                      </span>
+                      <button
+                        type="button"
+                        className="su-copy-btn"
+                        onClick={copyGitSnippet}
+                        title="Copy all commands as a single script"
+                      >
+                        {copiedGit ? <><Check size={11} /> All Copied</> : <><Copy size={11} /> Copy All Commands</>}
+                      </button>
                     </div>
-                  )}
-                </div>
 
-                <div className="su-field-wide su-snippet-container">
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)' }}>
-                    Just downloaded the starter kit? Push it to your Git repository:
-                  </span>
-                  <div className="su-snippet-box">
-                    <span>git init &amp;&amp; git add . &amp;&amp; git commit -m "Initial commit" &amp;&amp; git push</span>
-                    <button type="button" className="su-copy-btn" onClick={copyGitSnippet}>
-                      {copiedGit ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy commands</>}
+                    <div className="su-step-command-list">
+                      {[
+                        { label: 'Step 1: Open terminal in extracted folder and initialize Git', cmd: 'git init' },
+                        { label: 'Step 2: Stage all starter kit files', cmd: 'git add .' },
+                        { label: 'Step 3: Commit initial framework code', cmd: 'git commit -m "Initial commit with Testrix starter kit"' },
+                        { label: 'Step 4: Rename default branch to main', cmd: `git branch -M ${gitBranch || 'main'}` },
+                        { label: 'Step 5: Link to your remote Git repository', cmd: `git remote add origin ${gitRepoUrl.trim() || '<your-git-repo-url>'}` },
+                        { label: 'Step 6: Push your code to remote', cmd: `git push -u origin ${gitBranch || 'main'}` },
+                      ].map((s, idx) => (
+                        <div key={idx} className="su-step-command-item">
+                          <div className="su-step-command-info">
+                            <span className="su-step-command-label">{s.label}</span>
+                            <code className="su-step-command-text">{s.cmd}</code>
+                          </div>
+                          <button
+                            type="button"
+                            className="su-copy-btn"
+                            onClick={() => copyStepCommand(s.cmd, idx)}
+                            title="Copy this command"
+                          >
+                            {copiedCmdIndex === idx ? <Check size={11} /> : <Copy size={11} />}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Git Repository Form */}
+                <div className="su-form-grid" style={{ marginTop: 4 }}>
+                  <label className="su-field su-field-wide">
+                    <span>Git Repository URL</span>
+                    <input
+                      placeholder="https://github.com/organization/my-test-suite.git"
+                      value={gitRepoUrl}
+                      onChange={(e) => setGitRepoUrl(e.target.value)}
+                    />
+                  </label>
+                  <label className="su-field">
+                    <span>Branch</span>
+                    <input
+                      placeholder="main"
+                      value={gitBranch}
+                      onChange={(e) => setGitBranch(e.target.value)}
+                    />
+                  </label>
+                  <label className="su-field">
+                    <span>Authentication</span>
+                    <select
+                      className="su-field input"
+                      value={gitAuthType}
+                      onChange={(e) => setGitAuthType(e.target.value)}
+                      style={{ height: 38, borderRadius: 9, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', padding: '0 12px' }}
+                    >
+                      <option value="NONE">Public Repository (No Auth Required)</option>
+                      <option value="TOKEN">Token / Private Authentication</option>
+                    </select>
+                  </label>
+
+                  {gitAuthType === 'TOKEN' && (
+                    <>
+                      <label className="su-field">
+                        <span>Username / Account (optional)</span>
+                        <input
+                          placeholder="e.g. github-username"
+                          value={gitUsername}
+                          onChange={(e) => setGitUsername(e.target.value)}
+                        />
+                      </label>
+                      <label className="su-field">
+                        <span><Lock size={12} style={{ display: 'inline', marginRight: 4 }} /> Access Token / Password</span>
+                        <input
+                          type="password"
+                          placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                          value={gitToken}
+                          onChange={(e) => setGitToken(e.target.value)}
+                        />
+                      </label>
+                      <div className="su-field-wide" style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        <strong style={{ color: 'var(--text-primary)' }}>Why a Token instead of regular password?</strong>
+                        <p style={{ margin: '4px 0 0 0' }}>
+                          GitHub/GitLab discontinued regular account passwords for Git operations. For private repos, generate a <strong>Personal Access Token (classic)</strong> with <code>repo</code> scope:
+                        </p>
+                        <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 11, color: '#38bdf8' }}>
+                          GitHub Profile → Settings → Developer Settings → Personal Access Tokens → Tokens (classic) → Generate token (scope: repo)
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="su-field-wide su-test-bar">
+                    <button
+                      type="button"
+                      className="su-test-btn"
+                      onClick={handleTestGitConnection}
+                      disabled={testingGit || !gitRepoUrl.trim()}
+                    >
+                      <Activity size={13} color="#38bdf8" />
+                      {testingGit ? 'Testing Connection...' : 'Test Git Connection'}
                     </button>
+                    {gitTestResult && (
+                      <div className={`su-test-status ${gitTestResult.success ? 'su-test-status-success' : 'su-test-status-error'}`}>
+                        {gitTestResult.success ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                        {gitTestResult.message}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             )}
 
+            {/* ── MODE 2: LOCAL AGENT ──────────────────────────────────────── */}
             {sourceType === 'LOCAL_AGENT' && (
-              <div className="su-form-grid">
-                <label className="su-field su-field-wide">
-                  <span>Local Agent Identifier</span>
-                  <input
-                    placeholder="e.g. dev-laptop-agent-1"
-                    value={localAgentId}
-                    onChange={(e) => setLocalAgentId(e.target.value)}
-                  />
-                </label>
-                <div className="su-field-wide su-snippet-container">
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)' }}>
-                    Quickstart Command for Local Agent:
-                  </span>
-                  <div className="su-snippet-box">
-                    <span>npx @testrix/agent start --id="{localAgentId || 'my-agent'}" --dir="./my-framework"</span>
-                    <button
-                      type="button"
-                      className="su-copy-btn"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`npx @testrix/agent start --id="${localAgentId || 'my-agent'}" --dir="./my-framework"`);
-                        showToast('Agent quickstart command copied!', 'success');
-                      }}
-                    >
-                      <Copy size={12} /> Copy
-                    </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
+                <div className="su-agent-callout">
+                  <div className="su-agent-callout-header">
+                    <Laptop size={15} />
+                    <span>When &amp; How to use Local Agent (Behind Corporate Firewall / VPN):</span>
+                  </div>
+                  <p className="su-agent-callout-desc">
+                    <strong>Use Case:</strong> When <strong>Testrix is hosted on the Cloud</strong>, but your application or test framework is inside an internal company network, VPN, or your local machine that the internet cannot reach.
+                    <br />
+                    <strong>How it works:</strong> The agent makes an <em>outbound</em> connection to Testrix, so you <strong>do NOT have to open any inbound firewall ports</strong> or expose your network!
+                  </p>
+                </div>
+
+                <div className="su-form-grid">
+                  <label className="su-field su-field-wide">
+                    <span>Local Agent Identifier</span>
+                    <input
+                      placeholder="e.g. office-laptop-agent-1"
+                      value={localAgentId}
+                      onChange={(e) => setLocalAgentId(e.target.value)}
+                    />
+                  </label>
+
+                  <div className="su-field-wide" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 9, padding: '12px 14px' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
+                      Step-by-Step: Run the Agent on Your Machine:
+                    </span>
+
+                    <div className="su-step-command-list">
+                      <div className="su-step-command-item">
+                        <div className="su-step-command-info">
+                          <span className="su-step-command-label">Step 1: Open terminal in your framework folder</span>
+                          <code className="su-step-command-text">cd path/to/your/framework</code>
+                        </div>
+                        <button
+                          type="button"
+                          className="su-copy-btn"
+                          onClick={() => copyStepCommand('cd path/to/your/framework', 101)}
+                        >
+                          {copiedCmdIndex === 101 ? <Check size={11} /> : <Copy size={11} />}
+                        </button>
+                      </div>
+
+                      <div className="su-step-command-item">
+                        <div className="su-step-command-info">
+                          <span className="su-step-command-label">Step 2: Start the agent with your unique identifier</span>
+                          <code className="su-step-command-text">
+                            npx @testrix/agent start --id="{localAgentId || 'my-agent'}" --server="{typeof window !== 'undefined' ? window.location.origin : 'http://localhost:15000'}"
+                          </code>
+                        </div>
+                        <button
+                          type="button"
+                          className="su-copy-btn"
+                          onClick={() => copyStepCommand(`npx @testrix/agent start --id="${localAgentId || 'my-agent'}" --server="${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:15000'}"`, 102)}
+                        >
+                          {copiedCmdIndex === 102 ? <Check size={11} /> : <Copy size={11} />}
+                        </button>
+                      </div>
+
+                      <div className="su-step-command-item">
+                        <div className="su-step-command-info">
+                          <span className="su-step-command-label">Step 3: Agent establishes outbound connection and waits for runs</span>
+                          <code className="su-step-command-text">[STATUS: CONNECTED] Ready to execute tests</code>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <p className="su-hint su-field-wide">
-                  The Testrix Local Agent runs on your development machine, polls for assigned test executions, and securely streams results back.
+              </div>
+            )}
+
+            {/* ── MODE 4: IN-APP PLAYWRIGHT STUDIO (COMING SOON) ────────────── */}
+            {sourceType === 'INBUILT_STUDIO' && (
+              <div className="su-preview-card">
+                <span className="su-preview-card-badge">
+                  <Sparkles size={12} color="#a855f7" /> Will Introduce Soon in Phase 2
+                </span>
+                <h4>In-App Playwright Studio (Browser-Based Test Builder)</h4>
+                <p>
+                  Create, record, and maintain end-to-end Playwright tests directly within Testrix without touching any terminal, Node.js, or local Git repositories.
+                </p>
+                <div className="su-preview-features">
+                  <div className="su-preview-feature-item">
+                    <strong>🎬 Visual Test Recorder</strong>
+                    Click elements on your live website to record interactions and assertions automatically.
+                  </div>
+                  <div className="su-preview-feature-item">
+                    <strong>💻 Zero Local Setup</strong>
+                    No VS Code, Node.js, or local dependencies needed. Ready in seconds for QA engineers.
+                  </div>
+                  <div className="su-preview-feature-item">
+                    <strong>⚡ Instant In-Portal Runs</strong>
+                    Run recorded tests directly inside Testrix with live logs and video playback.
+                  </div>
+                </div>
+                <p style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                  For now, please select <strong>Git Remote</strong>, <strong>Local Agent</strong>, or <strong>Developer Mode (Local)</strong> above to connect your test code.
                 </p>
               </div>
             )}
 
+            {/* ── MODE 5: DISTRIBUTED GRID / WORKER POOL (COMING SOON) ──────── */}
+            {sourceType === 'GRID_CLUSTER' && (
+              <div className="su-preview-card">
+                <span className="su-preview-card-badge">
+                  <Cpu size={12} color="#ec4899" /> Will Introduce Soon in Phase 3
+                </span>
+                <h4>Distributed Grid / Worker Pool (Container Cluster)</h4>
+                <p>
+                  High-scale enterprise parallel execution across distributed Selenium Grid and Playwright worker nodes. Package frameworks into container images and run across multiple browser nodes simultaneously.
+                </p>
+                <div className="su-preview-features">
+                  <div className="su-preview-feature-item">
+                    <strong>🚀 50+ Parallel Suites</strong>
+                    Distribute test suites across scalable Docker worker pods for lightning-fast regression runs.
+                  </div>
+                  <div className="su-preview-feature-item">
+                    <strong>🌐 Multi-Browser Cluster</strong>
+                    Simultaneous cross-browser validation on Chrome, Firefox, Safari (WebKit), and Edge.
+                  </div>
+                  <div className="su-preview-feature-item">
+                    <strong>⚖️ Dynamic Load Balancing</strong>
+                    Intelligent queue-based dispatch with automatic slot management and fault isolation.
+                  </div>
+                </div>
+                <p style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                  For now, please select <strong>Git Remote</strong>, <strong>Local Agent</strong>, or <strong>Developer Mode (Local)</strong> above to connect your test code.
+                </p>
+              </div>
+            )}
+
+            {/* ── MODE 3: DEVELOPER MODE (LOCAL-TO-LOCAL / ANY FOLDER) ────────── */}
             {sourceType === 'LOCAL_DEV' && (
-              <>
-                <div className="su-path-explanation">
-                  <div className="su-path-row">
-                    <span className="su-path-label">Host Directory (on your Windows PC):</span>
-                    <code className="su-path-box">
-                      D:\testrix-project-frameworks\<b>{subfolder.trim() || 'your-folder-name'}</b>
-                    </code>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
+                <div className="su-mode-summary-card" style={{ background: 'rgba(245, 158, 11, 0.08)', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+                  <div className="su-mode-summary-title" style={{ color: '#f59e0b' }}>
+                    <FolderTree size={14} />
+                    <span>Developer Mode Active (Local-to-Local Execution)</span>
                   </div>
-                  <div className="su-path-row-sub">
-                    Mounted into Testrix Docker container at: <code>{rootPath || '/app/project-frameworks'}/{subfolder.trim() || 'your-folder-name'}</code>
-                  </div>
+                  <p>
+                    <strong>Use Case:</strong> Testrix and your framework are on the <strong>same computer (localhost)</strong>. Direct folder execution with zero network latency.
+                    <br />
+                    <strong>Any Folder Location Supported:</strong> Your framework can be anywhere on your machine (e.g. <code>D:\playwright-js</code>, <code>D:\New folder\MPHIDB</code>, <code>C:\projects\tests</code>, or a subfolder). There is no restriction to save in a specific predefined folder — jahan bhi framework hai, Testrix direct wahan se run karega!
+                  </p>
                 </div>
 
-                <label className="su-field" style={{ marginTop: 6 }}>
-                  <span>Folder name (subfolder under D:\testrix-project-frameworks)</span>
-                  <input
-                    placeholder="e.g. testrix-selenium-starter or your-folder"
-                    value={subfolder}
-                    onChange={(e) => setSubfolder(e.target.value)}
-                  />
-                </label>
-                <div className="su-test-bar" style={{ marginTop: 8 }}>
-                  <button
-                    type="button"
-                    className="su-test-btn"
-                    onClick={handleVerifyFolder}
-                    disabled={verifyingFolder || !subfolder.trim()}
-                  >
-                    <FolderTree size={13} color="#f59e0b" />
-                    {verifyingFolder ? 'Verifying Folder...' : 'Verify Folder on Server'}
-                  </button>
-                  {folderResult && (
-                    <div className={`su-test-status ${folderResult.exists ? 'su-test-status-success' : 'su-test-status-error'}`}>
-                      {folderResult.exists ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
-                      {folderResult.message}
-                    </div>
-                  )}
+                <div className="su-form-grid">
+                  <label className="su-field su-field-wide">
+                    <span>Framework Directory Path (Any location on your machine)</span>
+                    <input
+                      placeholder="e.g. D:\playwright-js or D:\New folder\MPHIDB or my-framework"
+                      value={subfolder}
+                      onChange={(e) => setSubfolder(e.target.value)}
+                    />
+                  </label>
+
+                  <div className="su-field-wide su-test-bar">
+                    <button
+                      type="button"
+                      className="su-test-btn"
+                      onClick={handleVerifyFolder}
+                      disabled={verifyingFolder || !subfolder.trim()}
+                    >
+                      <FolderTree size={13} color="#f59e0b" />
+                      {verifyingFolder ? 'Verifying Path...' : 'Verify Folder on Machine'}
+                    </button>
+                    {folderResult && (
+                      <div className={`su-test-status ${folderResult.exists ? 'su-test-status-success' : 'su-test-status-error'}`}>
+                        {folderResult.exists ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                        {folderResult.message}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </>
+              </div>
             )}
 
             <div className="su-actions">
+              <button
+                type="button"
+                className="su-back-btn"
+                onClick={() => goToStep(1)}
+                disabled={busy}
+              >
+                <ArrowLeft size={14} /> Back
+              </button>
               <button className="su-secondary-btn" onClick={handleRedownload} disabled={busy}>
                 Re-download starter kit
               </button>
@@ -678,6 +987,14 @@ export function AutomationSetupWizard({ onFinish }) {
               </label>
             </div>
             <div className="su-actions">
+              <button
+                type="button"
+                className="su-back-btn"
+                onClick={() => goToStep(2)}
+                disabled={busy}
+              >
+                <ArrowLeft size={14} /> Back
+              </button>
               <button className="su-primary-btn" onClick={handleCreateModule} disabled={busy}>
                 {busy ? 'Creating…' : <>Create Module <ArrowRight size={14} /></>}
               </button>
@@ -719,6 +1036,14 @@ export function AutomationSetupWizard({ onFinish }) {
               </label>
             </div>
             <div className="su-actions">
+              <button
+                type="button"
+                className="su-back-btn"
+                onClick={() => goToStep(3)}
+                disabled={busy}
+              >
+                <ArrowLeft size={14} /> Back
+              </button>
               <button className="su-primary-btn" onClick={handleCreateEnvironment} disabled={busy}>
                 {busy ? 'Creating…' : <>Create Environment <ArrowRight size={14} /></>}
               </button>
@@ -739,6 +1064,13 @@ export function AutomationSetupWizard({ onFinish }) {
               <li>Read the full setup &amp; usage manual from the Integration Guide</li>
             </ul>
             <div className="su-actions">
+              <button
+                type="button"
+                className="su-back-btn"
+                onClick={() => goToStep(4)}
+              >
+                <ArrowLeft size={14} /> Back
+              </button>
               <button className="su-primary-btn" onClick={onFinish}>
                 Go to Dashboard <ArrowRight size={14} />
               </button>

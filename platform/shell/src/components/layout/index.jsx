@@ -12,7 +12,8 @@ import {
   Users,
   Workflow,
   Briefcase,
-  Cpu
+  Cpu,
+  Layers
 } from 'lucide-react';
 import { GlobalSearchDropdown } from '../../search/components/GlobalSearchDropdown.jsx';
 import { SIDEBAR_NAV, NAV_MODULE_REQUIREMENT } from '../../constants.js';
@@ -24,7 +25,7 @@ import testrixLogo from '../../assets/testrix_logo.png';
 const NAV_ICON_MAP = {
   LayoutDashboard, Play, Globe2, Gauge, UserCircle, FileText, TerminalSquare, Camera, GitCompare,
   Database, Workflow, CalendarClock, History, FolderTree, Package, Users, Settings, BookOpen,
-  Sparkles, Table2, ListChecks, Briefcase, Cpu
+  Sparkles, Table2, ListChecks, Briefcase, Cpu, Layers
 };
 
 // ── Layout: Sidebar ─────────────────────────────────────────────────────────
@@ -66,7 +67,8 @@ export function Sidebar({
     icon: 'Settings',
     children: [
       { key: 'workspace-settings', label: 'Workspace Settings', icon: 'Briefcase' },
-      { key: 'automation-settings', label: 'Automation Settings', icon: 'Cpu' }
+      { key: 'automation-settings', label: 'Automation Settings', icon: 'Cpu' },
+      { key: 'automation-scaling', label: 'Runner Scaling', icon: 'Layers' }
     ]
   };
   if (profileIdx >= 0) {
@@ -514,7 +516,7 @@ export function PortalLayout({
       </div>
       <main className={`layout-main ${mainClassName}`.trim()}>
         {topbar}
-        <div className="layout-content">
+        <div className="layout-content page-fade-enter">
           {children}
         </div>
       </main>

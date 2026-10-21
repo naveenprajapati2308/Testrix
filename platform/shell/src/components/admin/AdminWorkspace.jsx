@@ -8,9 +8,21 @@ import {
   Play,
   Shield,
   Users,
-  Zap
+  Zap,
+  Layers,
+  Cpu,
+  Briefcase,
+  Sliders,
+  Package,
+  Clock,
+  UserCog,
+  KeyRound,
+  TerminalSquare,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { getStoredThemePref, resolveEffectiveTheme } from '../../../../../shared/ui/theme-sync.js';
 import appLogo from '../../assets/testrix_logo.png';
 import { ADMIN_WORKSPACE_NAV, ADMIN_WORKSPACE_NAV_FLAT } from '../../constants.js';
 import { Breadcrumb } from '../layout/index.jsx';
@@ -22,10 +34,15 @@ import { PortalConfig } from './PortalConfig.jsx';
 import { ApiCollection } from './ApiCollection.jsx';
 import { WorkspaceRequests } from './WorkspaceRequests.jsx';
 import { ProjectManagement } from './ProjectManagement.jsx';
+import { AutomationWorkspace } from '../automation/AutomationWorkspace.jsx';
+import { WorkspaceSettings } from '../team/WorkspaceSettings.jsx';
 import { Placeholder } from '../shared/index.jsx';
 import { IntegrationGuide } from '../shared/IntegrationGuide.jsx';
 
-const WS_ICON_MAP = { Shield, Users, BookOpen, Play, Zap, Building2, ClipboardList, FolderKanban };
+const WS_ICON_MAP = {
+  Shield, Users, BookOpen, Play, Zap, Building2, ClipboardList, FolderKanban,
+  Layers, Cpu, Briefcase, Sliders, Package, Clock, UserCog, KeyRound, TerminalSquare
+};
 ADMIN_WORKSPACE_NAV.forEach((item) => { item._icon = WS_ICON_MAP[item.icon]; });
 
 // ── Admin Sidebar — plugs directly into the platform shell's single
@@ -113,6 +130,14 @@ export function AdminSidebar({ activePage, onNavigate, logout }) {
 
 // ── Admin Topbar — same slot as the main Topbar, swapped in for admin mode ──
 export function AdminTopbar({ pageTitle, notice, onNavigateRoot, user, onNavigateProfile }) {
+  const [themePref, setThemePref] = useState(() => getStoredThemePref());
+
+  const chooseTheme = (pref) => {
+    setThemePref(pref);
+    localStorage.setItem('portal-theme', pref);
+    document.documentElement.dataset.theme = resolveEffectiveTheme(pref);
+  };
+
   return (
     <header className="topbar admin-topbar">
       <div>
@@ -121,6 +146,25 @@ export function AdminTopbar({ pageTitle, notice, onNavigateRoot, user, onNavigat
         <p className="admin-notice">{notice}</p>
       </div>
       <div className="topbar-right">
+        <div className="tb-theme-switch" role="group" aria-label="Theme">
+          <button
+            type="button"
+            className={themePref === 'light' ? 'active' : ''}
+            onClick={() => chooseTheme('light')}
+            title="Light theme"
+          >
+            <Sun size={15} />
+          </button>
+          <button
+            type="button"
+            className={themePref === 'dark' ? 'active' : ''}
+            onClick={() => chooseTheme('dark')}
+            title="Dark theme"
+          >
+            <Moon size={15} />
+          </button>
+        </div>
+
         <div className="admin-badge">
           <Shield size={14} />
           Super Admin
@@ -150,9 +194,12 @@ export function AdminContent({ activePage, setActivePage, setNotice }) {
       {activePage === 'user-management' && <UserManagement setNotice={setNotice} />}
       {activePage === 'module-management' && <ModuleManagement setNotice={setNotice} />}
       {activePage === 'portal-config' && <PortalConfig setNotice={setNotice} />}
+      {activePage === 'runner-scaling-admin' && <AutomationWorkspace activePage="settings-scaling" />}
+      {activePage === 'automation-settings-admin' && <AutomationWorkspace activePage="settings-engines" />}
       {activePage === 'role-management' && <RoleManagement setNotice={setNotice} />}
       {activePage === 'workspace-requests' && <WorkspaceRequests setNotice={setNotice} />}
       {activePage === 'project-management' && <ProjectManagement setNotice={setNotice} />}
+      {activePage === 'workspace-settings-admin' && <WorkspaceSettings setNotice={setNotice} />}
       {activePage === 'access-management' && <Placeholder title="Access Management" lines={['IP allowlists', 'Session policies', 'Coming in a future phase']} />}
       {activePage === 'documentation' && <IntegrationGuide superAdmin setNotice={setNotice} />}
       {activePage === 'api-collection' && <ApiCollection />}

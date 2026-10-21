@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../../api.js';
 import { Field } from '../shared/Field.jsx';
+import { notify } from '../../../../../shared/ui/NotificationProvider.jsx';
 
 // ── Change Email Form ─────────────────────────────────────────────────────────
 export function ChangeEmailForm({ setNotice, onClose, emailOtp, setEmailOtp }) {
@@ -17,10 +18,10 @@ export function ChangeEmailForm({ setNotice, onClose, emailOtp, setEmailOtp }) {
       const data = await api.requestEmailChange({ newEmail });
       setEmailOtp(data.otp);
       setStep('verify');
-      setNotice('OTP generated. Use the code shown below.');
+      notify.info('OTP generated. Use the verification code shown.');
     } catch (err) {
       setFormError(err.message);
-      setNotice(err.message);
+      notify.error(err.message || 'Failed to request email change OTP.');
     }
   };
 
@@ -29,12 +30,12 @@ export function ChangeEmailForm({ setNotice, onClose, emailOtp, setEmailOtp }) {
     setFormError('');
     try {
       await api.verifyEmailChange({ newEmail, otp });
-      setNotice('Email changed successfully.');
+      notify.success('Email changed successfully.');
       setEmailOtp(null);
       onClose();
     } catch (err) {
       setFormError(err.message);
-      setNotice(err.message);
+      notify.error(err.message || 'Failed to verify OTP.');
     }
   };
 

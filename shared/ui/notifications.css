@@ -1,0 +1,430 @@
+/* ── Unified Notification & Confirmation System Styles ─────────────────────── */
+
+/* Toast Container */
+.testrix-toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+  width: calc(100vw - 48px);
+  pointer-events: none;
+}
+
+/* Toast Card */
+.testrix-toast {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px 16px 14px;
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  animation: testrixToastEnter 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.18s ease;
+}
+
+.testrix-toast:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -5px rgba(15, 23, 42, 0.16), 0 10px 12px -6px rgba(15, 23, 42, 0.1);
+}
+
+.testrix-toast.testrix-toast-exiting {
+  animation: testrixToastExit 180ms ease-in forwards;
+}
+
+/* Toast Tone Variants */
+.testrix-toast-success {
+  border-left: 4px solid #16a34a;
+}
+.testrix-toast-error {
+  border-left: 4px solid #dc2626;
+}
+.testrix-toast-warning {
+  border-left: 4px solid #d97706;
+}
+.testrix-toast-info {
+  border-left: 4px solid #2563eb;
+}
+
+/* Icon Box */
+.testrix-toast-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.testrix-toast-success .testrix-toast-icon-wrapper {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+}
+.testrix-toast-error .testrix-toast-icon-wrapper {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+.testrix-toast-warning .testrix-toast-icon-wrapper {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+.testrix-toast-info .testrix-toast-icon-wrapper {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+[data-theme="dark"] .testrix-toast-success .testrix-toast-icon-wrapper {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+}
+[data-theme="dark"] .testrix-toast-error .testrix-toast-icon-wrapper {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+[data-theme="dark"] .testrix-toast-warning .testrix-toast-icon-wrapper {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+}
+[data-theme="dark"] .testrix-toast-info .testrix-toast-icon-wrapper {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+}
+
+/* Toast Content */
+.testrix-toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.testrix-toast-title {
+  margin: 0 0 3px 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  line-height: 1.35;
+}
+
+.testrix-toast-message {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary, #334155);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+/* Close Button */
+.testrix-toast-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: -2px;
+  margin-right: -4px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.testrix-toast-close:hover {
+  opacity: 1;
+  background: var(--bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--text-primary, #0f172a);
+}
+
+/* Progress Countdown Bar */
+.testrix-toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.35;
+  transform-origin: left;
+}
+
+.testrix-toast-success .testrix-toast-progress-bar { color: #16a34a; }
+.testrix-toast-error .testrix-toast-progress-bar { color: #dc2626; }
+.testrix-toast-warning .testrix-toast-progress-bar { color: #d97706; }
+.testrix-toast-info .testrix-toast-progress-bar { color: #2563eb; }
+
+/* ── Modal & Confirmation Dialog Styles ─────────────────────────────────────── */
+.testrix-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: testrixBackdropFadeIn 200ms ease-out forwards;
+}
+
+.testrix-dialog-backdrop.testrix-dialog-closing {
+  animation: testrixBackdropFadeOut 180ms ease-in forwards;
+}
+
+.testrix-dialog-panel {
+  position: relative;
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  max-width: 440px;
+  width: 100%;
+  padding: 24px;
+  animation: testrixDialogZoomIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  outline: none;
+}
+
+.testrix-dialog-panel.testrix-dialog-closing {
+  animation: testrixDialogZoomOut 180ms ease-in forwards;
+}
+
+.testrix-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.testrix-dialog-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.testrix-dialog-icon.danger {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+.testrix-dialog-icon.warning {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+.testrix-dialog-icon.info {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.testrix-dialog-title-group h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+}
+
+.testrix-dialog-title-group p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-secondary, #475569);
+  line-height: 1.5;
+}
+
+.testrix-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.testrix-dialog-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.testrix-dialog-btn:active {
+  transform: scale(0.98);
+}
+
+.testrix-dialog-btn-cancel {
+  background: var(--bg-surface, #ffffff);
+  border-color: var(--border, #cbd5e1);
+  color: var(--text-secondary, #334155);
+}
+
+.testrix-dialog-btn-cancel:hover {
+  background: var(--bg-hover, #f1f5f9);
+  color: var(--text-primary, #0f172a);
+}
+
+.testrix-dialog-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.testrix-dialog-btn-danger:hover {
+  background: #b91c1c;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.testrix-dialog-btn-primary {
+  background: var(--accent, #4f46e5);
+  color: #ffffff;
+}
+
+.testrix-dialog-btn-primary:hover {
+  background: var(--accent-hover, #4338ca);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+/* ── Smooth Page & Tab Transition Classes ────────────────────────────────────── */
+.page-fade-enter {
+  animation: testrixPageEnter 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tab-fade-enter {
+  animation: testrixTabEnter 180ms ease-out forwards;
+}
+
+/* Interactive Element States */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent, #4f46e5);
+  outline-offset: 2px;
+}
+
+/* ── Keyframe Animations ─────────────────────────────────────────────────────── */
+@keyframes testrixToastEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes testrixToastExit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.94);
+  }
+}
+
+@keyframes testrixBackdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes testrixBackdropFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes testrixDialogZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes testrixDialogZoomOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+
+@keyframes testrixPageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes testrixTabEnter {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .testrix-toast,
+  .testrix-dialog-backdrop,
+  .testrix-dialog-panel,
+  .page-fade-enter,
+  .tab-fade-enter {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Legacy Modal & ConfirmDialog theme compatibility */
+[data-theme="dark"] .confirm-dialog,
+[data-theme="dark"] .modal {
+  background: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+[data-theme="dark"] .confirm-dialog h3,
+[data-theme="dark"] .modal-header h2 {
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] .confirm-dialog p {
+  color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .confirm-icon {
+  background: rgba(239, 68, 68, 0.18) !important;
+  color: #f87171 !important;
+}
